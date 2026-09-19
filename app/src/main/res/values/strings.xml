@@ -7,6 +7,8 @@
     <string name="accessibility_summary">Enforces the daily app time limits you set in Focus.</string>
     <string name="accessibility_description">Focus uses this service to notice which app is in front, so it can lock an app once its daily time limit is used up. It also lets home-screen gestures open notifications or lock the screen.\n\nThe service only receives the name of the app that is on screen. It cannot read what is on your screen, and nothing ever leaves your device.</string>
 
+    <string name="media_listener_label">Focus music card</string>
+
     <string name="channel_weekly">Weekly review</string>
     <string name="channel_weekly_desc">A reminder when your weekly screen-time review is ready.</string>
 </resources>

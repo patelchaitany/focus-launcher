@@ -59,6 +59,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Focus has one language. Without this the AndroidX libraries' strings come along in 85.
+    androidResources {
+        localeFilters += "en"
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

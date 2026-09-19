@@ -37,6 +37,7 @@ import com.focus.launcher.service.WeeklyReview
 import com.focus.launcher.ui.drawer.AppMenu
 import com.focus.launcher.ui.drawer.DrawerScreen
 import com.focus.launcher.ui.home.HomeScreen
+import com.focus.launcher.ui.home.WidgetHost
 import com.focus.launcher.ui.launchApp
 import com.focus.launcher.ui.openWebSearch
 import com.focus.launcher.ui.theme.FocusTheme
@@ -61,6 +62,16 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(settings.dark, settings.hideStatusBar) { applyFocusWindow(settings.dark, settings.hideStatusBar) }
             FocusTheme(settings) { Launcher(settings, homePresses) }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        WidgetHost.listen(this, true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        WidgetHost.listen(this, false)
     }
 
     override fun onNewIntent(intent: Intent) {

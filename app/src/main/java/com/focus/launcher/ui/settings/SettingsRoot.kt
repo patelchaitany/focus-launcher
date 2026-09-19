@@ -75,6 +75,7 @@ object Routes {
     const val SETUP = "setup"
     const val HOME = "home"
     const val FAST_APPS = "fastapps"
+    const val ARRANGE = "arrange"
     const val DRAWER = "drawer"
     const val HIDDEN = "hidden"
     const val TIMERS = "timers"
@@ -118,6 +119,7 @@ fun SettingsRoot(settings: Settings, startRoute: String?, onExit: () -> Unit) {
             Routes.SETUP -> SetupPage(status, back) { status = SetupStatus.read(context) }
             Routes.HOME -> HomePage(settings, apps, back, go)
             Routes.FAST_APPS -> FastAppsPage(settings, apps, back)
+            Routes.ARRANGE -> ArrangePage(settings, back)
             Routes.DRAWER -> DrawerPage(settings, back, go)
             Routes.HIDDEN -> HiddenAppsPage(settings, apps, back)
             Routes.TIMERS -> TimersPage(settings, apps, status, back, go)
@@ -142,7 +144,7 @@ private fun MainPage(settings: Settings, appCount: Int, status: SetupStatus, onB
             onClick = { go(Routes.SETUP) },
         )
         Section("Launcher")
-        SettingRow("Home screen", subtitle = "Clock, sections, fast apps, corner shortcuts", onClick = { go(Routes.HOME) })
+        SettingRow("Home screen", subtitle = "Clock, sections and their order, fast apps, corner shortcuts", onClick = { go(Routes.HOME) })
         SettingRow("App drawer", subtitle = "Keyboard, search, recently installed, hidden apps", value = "$appCount apps", onClick = { go(Routes.DRAWER) })
         SettingRow("Gestures", subtitle = "Swipes, double tap, keyboard in the drawer", onClick = { go(Routes.GESTURES) })
         SettingRow("Appearance", subtitle = "Black or white, typeface, text size", onClick = { go(Routes.APPEARANCE) })

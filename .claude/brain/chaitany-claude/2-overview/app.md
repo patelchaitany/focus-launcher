@@ -29,8 +29,11 @@ ui/     theme/ components/ home/ drawer/ block/ review/ settings/   + Launching.
 | Feature | Where |
 | --- | --- |
 | Ring clock (battery or day), tap/long-press action | `ui/home/HomeWidgets.kt` `HomeClock`, `ClockTapDialog.kt` |
-| Screen time on home: title + total + "N% of today" (of 24 h) below the clock, outside the ring, no setting; tap → review (the 24-hour bar was removed from home; `DayBar` lives on in the review) | `HomeWidgets.kt` `ScreenTimeLine`; height counted in `HomeScreen` `heightOf` |
-| Home layout that always fits | `ui/home/HomeScreen.kt` (`Fit` options, measured constants) |
+| Screen time on home: title + total + "N% of today · N unlocks" (of 24 h) below the clock, outside the ring, no setting; tap → review (the 24-hour bar was removed from home; `DayBar` lives on in the review) | `HomeWidgets.kt` `ScreenTimeLine`; height counted in `HomeScreen` `heightOf` |
+| Home layout that always fits, sections in a user-chosen order | `ui/home/HomeScreen.kt` (`Fit` options, measured constants, `Settings.homeOrder`) |
+| Music and note as rounded cards on one grid (side by side when adjacent, else full width; strips when full); the calendar is a plain text section | `HomeWidgets.kt` `Tile`, `MusicTile`, `NoteTile`, `CalendarWidget`; rows built in `HomeScreen` |
+| Arrange home screen: drag to order (also by holding a section on the home screen), tap to show or hide, pick another app's widget for calendar / note | `ui/settings/ArrangePage.kt`, `HomeScreen.kt` (column `pointerInput`), `ui/home/HostedWidget.kt` |
+| Music card with song name | `HomeWidgets.kt` `MusicTile`, `service/MediaListener.kt` (empty notification listener = the key to media sessions) |
 | Drawer: search ranking, recent installs, A–Z scrubber | `ui/drawer/DrawerScreen.kt` |
 | Drawer sort (A–Z / Most used / Recent), "Sort: …" under the search bar | `DrawerScreen.kt`, `Settings.drawerSort` (`DrawerSort`), `UsageRepository.sortStats()` |
 | Drawer Personal / Work tabs (only with a work profile) | `DrawerScreen.kt`, `TabChip` in `ui/components/Basics.kt` |
@@ -44,7 +47,7 @@ ui/     theme/ components/ home/ drawer/ block/ review/ settings/   + Launching.
 | Setup page (default home, usage access, app locking, notifications, calendar) | `ui/settings/SetupPage.kt` |
 | Launch gate (wall / consent before an app opens) | `ui/Launching.kt` `launchApp`, `start`, `launchOptions` |
 | Wall + consent UI | `ui/block/BlockScreen.kt`, `BlockActivity.kt` |
-| Settings pages (12 routes) | `ui/settings/*` ; routes: main setup home fastapps drawer hidden timers timerapps weekly appearance gestures about |
+| Settings pages (13 routes) | `ui/settings/*` ; routes: main setup home arrange fastapps drawer hidden timers timerapps weekly appearance gestures about |
 | Theme, light-up press feedback, edge-to-edge, refresh rate | `ui/theme/Theme.kt` |
 
 ## Things that are easy to get wrong

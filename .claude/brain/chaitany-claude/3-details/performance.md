@@ -49,6 +49,37 @@ is shared runtime, framework and GPU-driver code. **Never claim a memory win fro
 readings.** `speed-profile` was chosen over `speed`: nearly the same speed, less mapped code
 (with `speed`, "Code" read 17.8 MB), and it is what Android converges to for store installs.
 
+## Second pass (2026-09-20): the home cards, widgets and music, audited by reading, then fixed
+- **An "empty" `NotificationListenerService` is not free:** while bound it receives every
+  notification posted, removed or re-ranked, screen on or off. → `requestUnbind()` on connect;
+  media sessions only need the grant.
+- **Player callbacks tick every second.** Re-reading `controller.metadata` in them is a binder
+  call carrying the album art, and a non-data state class redraws the card each time. → data
+  class, built from the callback arguments.
+- `onGloballyPositioned` fires on every frame an ancestor moves (each pager swipe frame) → `onPlaced`.
+- Drawer sort re-queried 7 days of usage on every open and made the list jump → same map
+  instance for 5 minutes (`UsageRepository.sortStats`), dropped on `TRIM_MEMORY_BACKGROUND`.
+- Widget labels open other apps' resources → the picker's list is built on IO. `release()` (a
+  binder call) happens outside the settings lock.
+- Everything new is off by default except the right-swipe detector. Costs while on: next alarm =
+  one binder call per resume and per visible minute; a hosted widget = the other app's layout in
+  this process, a widget-sized hardware layer, `startListening` per start. **A widget that
+  animates draws frames forever: check the chosen one with `gfxinfo`.**
+- Measured after the fixes (release build, cards on, home in front, nobody touching): four
+  consecutive 5 s windows at **0 frames**, 10-20 ms CPU each including the probes. Screen off: 0
+  frames. The first 10 s after arriving home are not idle and must not be read as such.
+
+## APK size (2026-09-20)
+Asked because the APK had grown about 50 KB with the new home features. Measured with `dexdump`
++ the R8 `mapping.txt` (sum of method code bytes per original package): Compose ui + foundation +
+runtime ≈ 63% of the dex, Focus's own code ≈ 12.6%. **Dead source costs nothing in the APK** (R8
+removes it); what costs is reachable code and resources. The one real lever was resources: the
+locale filter took 74 KB off, leaving the APK *smaller than 1.0* (1,366,063 → 1,341,535 bytes)
+with every new feature in. Not taken: dropping the x86 / x86_64 copies of
+`libandroidx.graphics.path.so` (≈20 KB; would break Focus on x86 devices if Compose ever needs it
+there). A scan for declarations referenced nowhere found two, both the owner's and older than
+this work (`ConfirmDialog`, `WeekSummary.weekEnd`); left alone.
+
 ## Traps
 `TRIM_MEMORY_UI_HIDDEN` fires on every app launch from a launcher: clearing caches there defeats
 them. After `adb install`, run `compile -m speed-profile -f` only once the app has been running

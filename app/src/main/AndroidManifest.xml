@@ -90,6 +90,18 @@
                 android:resource="@xml/accessibility_service" />
         </service>
 
+        <!-- Optional. Only the key to "which player is active and what is it playing" for the music
+             card; the service itself is empty and reads no notification. -->
+        <service
+            android:name=".service.MediaListener"
+            android:exported="true"
+            android:label="@string/media_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".service.WeeklyReviewReceiver"
             android:exported="false" />

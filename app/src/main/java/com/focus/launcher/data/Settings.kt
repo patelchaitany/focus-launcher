@@ -15,6 +15,14 @@ enum class LaunchAnimation(val label: String) { FAST("Fast"), SYSTEM("System def
 
 enum class HomeAlign(val label: String) { LEFT("Left"), CENTER("Center"), RIGHT("Right") }
 
+/**
+ * The movable parts of the home screen, between the clock on top and the corner shortcuts at the
+ * bottom. All of them are plain text; none is a hosted widget.
+ */
+enum class HomeSection(val label: String) {
+    SCREEN_TIME("Screen time"), CALENDAR("Calendar"), MUSIC("Music controls"), NOTE("Note"), APPS("Fast apps")
+}
+
 /** Order of the app list in the drawer. */
 enum class DrawerSort(val label: String) { ALPHA("A–Z"), MOST_USED("Most used"), RECENT("Recent") }
 
@@ -58,6 +66,14 @@ data class Settings(
     val calendarKey: String = CALENDAR_AUTO,
     /** The Mon-Sun strip with today marked. Off: the ring already carries the date. */
     val showWeekStrip: Boolean = false,
+    /** Top to bottom. Holds every [HomeSection], shown or not; see [shows]. */
+    val homeOrder: List<HomeSection> = HomeSection.entries,
+    val showMusic: Boolean = false,
+    val showNote: Boolean = false,
+    /** The text of the note section. */
+    val note: String = "",
+    /** Id of another app's widget shown in place of Focus's own note card; 0 = Focus's own. */
+    val noteWidget: Int = 0,
     val homeAlign: HomeAlign = HomeAlign.CENTER,
     val favorites: List<String> = emptyList(),
     val showShortcuts: Boolean = true,
@@ -105,6 +121,14 @@ data class Settings(
     val swipeRightSearch: Boolean = true,
     val doubleTapLock: Boolean = true,
 ) {
+    fun shows(section: HomeSection): Boolean = when (section) {
+        // Always there: what Focus is for. They can be moved, not switched off.
+        HomeSection.SCREEN_TIME, HomeSection.APPS -> true
+        HomeSection.CALENDAR -> showCalendar
+        HomeSection.MUSIC -> showMusic
+        HomeSection.NOTE -> showNote
+    }
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("dark", dark)
         put("font", font.name)
@@ -120,6 +144,11 @@ data class Settings(
         put("showCalendar", showCalendar)
         put("calendarKey", calendarKey)
         put("showWeekStrip", showWeekStrip)
+        put("homeOrder", JSONArray(homeOrder.map { it.name }))
+        put("showMusic", showMusic)
+        put("showNote", showNote)
+        put("note", note)
+        put("noteWidget", noteWidget)
         put("homeAlign", homeAlign.name)
         put("favorites", JSONArray(favorites))
         put("showShortcuts", showShortcuts)
@@ -182,6 +211,14 @@ data class Settings(
                     }
                 },
                 showWeekStrip = o.optBoolean("showWeekStrip", d.showWeekStrip),
+                // Saved order first; a section this install has never heard of goes to its default place at the end.
+                homeOrder = o.optJSONArray("homeOrder").strings()
+                    .mapNotNull { name -> HomeSection.entries.firstOrNull { it.name == name } }
+                    .let { saved -> (saved + HomeSection.entries).distinct() },
+                showMusic = o.optBoolean("showMusic", d.showMusic),
+                showNote = o.optBoolean("showNote", d.showNote),
+                note = o.optString("note", d.note),
+                noteWidget = o.optInt("noteWidget", 0),
                 homeAlign = enumOr(o.optString("homeAlign"), d.homeAlign),
                 favorites = o.optJSONArray("favorites").strings().take(MAX_FAVORITES),
                 showShortcuts = o.optBoolean("showShortcuts", d.showShortcuts),

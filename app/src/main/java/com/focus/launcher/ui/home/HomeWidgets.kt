@@ -1,5 +1,30 @@
 package com.focus.launcher.ui.home
 
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
+import android.provider.Settings as AndroidSettings
+import androidx.lifecycle.compose.LifecycleStartEffect
+import com.focus.launcher.service.MediaListener
+import com.focus.launcher.util.Perms
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import android.media.AudioManager
+import android.view.KeyEvent
+import com.focus.launcher.ui.components.hasColourGlyphs
+import com.focus.launcher.ui.components.monochrome
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -274,13 +299,28 @@ fun HourScale(modifier: Modifier = Modifier) {
     }
 }
 
+private fun unlocksText(today: DayUsage?): String = (today?.unlocks ?: 0).let { if (it == 1) "1 unlock" else "$it unlocks" }
+
 /**
  * Today's screen time, said plainly under the clock: a small title, the total in type large
  * enough to read at a glance, and what share of the day's 24 hours that is. A tap opens the review, where the hour-by-hour picture lives.
  */
 @Composable
-fun ScreenTimeLine(today: DayUsage?, hasAccess: Boolean, align: Alignment.Horizontal, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ScreenTimeLine(
+    today: DayUsage?, hasAccess: Boolean, align: Alignment.Horizontal, onClick: () -> Unit, modifier: Modifier = Modifier,
+    /** One line, for a home screen that has run out of room: "Screen Time  26m  · 1% of today". */
+    compact: Boolean = false,
+) {
     val c = LocalFocusColors.current
+    if (compact && hasAccess) {
+        val total = today?.total ?: 0L
+        Row(modifier.press(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
+            T("Screen Time", Modifier.padding(bottom = 1.dp), size = 14.sp, color = c.dim, maxLines = 1)
+            T(formatDuration(total), Modifier.padding(horizontal = 10.dp), size = 18.sp, maxLines = 1)
+            T("${total * 100 / (24 * DayUsage.HOUR_MS)}%  ·  ${unlocksText(today)}", Modifier.padding(bottom = 1.dp), size = 13.sp, color = c.dim, maxLines = 1)
+        }
+        return
+    }
     Column(modifier.press(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = align) {
         T("Screen Time", size = 15.sp, color = c.dim, maxLines = 1)
         VSpace(3.dp)
@@ -288,10 +328,270 @@ fun ScreenTimeLine(today: DayUsage?, hasAccess: Boolean, align: Alignment.Horizo
             val total = today?.total ?: 0L
             T(formatDuration(total), size = 24.sp, maxLines = 1)
             // Of all 24 hours, sleep included: the same yardstick every day, at any time of day.
-            T("${total * 100 / (24 * DayUsage.HOUR_MS)}% of today", size = 13.sp, color = c.dim, maxLines = 1)
+            // How often the phone was picked up says as much as how long it was held.
+            T("${total * 100 / (24 * DayUsage.HOUR_MS)}% of today  ·  ${unlocksText(today)}", size = 13.sp, color = c.dim, maxLines = 1)
         } else {
             T("Allow usage access  →", size = 14.sp, color = c.dim, maxLines = 1)
         }
+    }
+}
+
+/** The room a card has: beside another card, the full width to itself, or one line on a full screen. */
+enum class TileShape { SQUARE, WIDE, STRIP }
+
+private fun Modifier.panel(fill: Color, onClick: (() -> Unit)?) = this
+    .clip(RoundedCornerShape(18.dp))
+    .background(fill)
+    .then(if (onClick != null) Modifier.press(onClick = onClick) else Modifier)
+
+/**
+ * A section of the home screen as a card: a soft rounded panel, one shade off the background, with
+ * a small title and its content underneath. Two narrow ones share a row; see `HomeScreen`.
+ */
+@Composable
+fun Tile(title: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.panel(LocalFocusColors.current.line.copy(alpha = 0.6f), onClick).padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Label(title)
+        VSpace(8.dp)
+        content()
+    }
+}
+
+/** The same card on a screen with no room left: its title and one line of content, side by side. */
+@Composable
+fun Strip(title: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier.fillMaxWidth().panel(LocalFocusColors.current.line.copy(alpha = 0.6f), onClick).heightIn(min = STRIP_HEIGHT.dp).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Label(title)
+        HSpace(14.dp)
+        content()
+    }
+}
+
+const val STRIP_HEIGHT = 40f
+
+/** What the active player says about itself. */
+/** A data class on purpose: a player that reports the same thing again changes no state, so nothing redraws. */
+private data class NowPlaying(val controller: MediaController, val title: String?, val artist: String?, val playing: Boolean)
+
+/**
+ * The player that is active right now, while the home screen is visible and only then. Needs
+ * notification access ([MediaListener]); without it this stays null and the card falls back to
+ * media keys. Everything here is pushed by the system: nothing polls.
+ */
+@Composable
+private fun rememberNowPlaying(hasAccess: Boolean): NowPlaying? {
+    val context = LocalContext.current
+    var now by remember { mutableStateOf<NowPlaying?>(null) }
+    LifecycleStartEffect(hasAccess) {
+        val sessions = context.getSystemService(MediaSessionManager::class.java)
+        val component = MediaListener.component(context)
+        var watched: MediaController? = null
+        val callback = object : MediaController.Callback() {
+            // Players report their position every second or so. Take what the callback hands over
+            // instead of fetching everything again (the metadata carries the album art).
+            override fun onMetadataChanged(metadata: MediaMetadata?) {
+                now = now?.copy(title = metadata.title(), artist = metadata.artist())
+            }
+
+            override fun onPlaybackStateChanged(state: PlaybackState?) {
+                now = now?.copy(playing = state?.state == PlaybackState.STATE_PLAYING)
+            }
+            override fun onSessionDestroyed() { now = null }
+        }
+        fun watch(controllers: List<MediaController>?) {
+            watched?.unregisterCallback(callback)
+            // The system lists the session that would receive a media key first.
+            watched = controllers?.firstOrNull()?.also { it.registerCallback(callback) }
+            now = watched?.read()
+        }
+        val listener = MediaSessionManager.OnActiveSessionsChangedListener { watch(it) }
+        if (hasAccess && sessions != null) {
+            try {
+                sessions.addOnActiveSessionsChangedListener(listener, component)
+                watch(sessions.getActiveSessions(component))
+            } catch (_: SecurityException) {
+                now = null
+            }
+        } else {
+            now = null
+        }
+        onStopOrDispose {
+            watched?.unregisterCallback(callback)
+            sessions?.removeOnActiveSessionsChangedListener(listener)
+        }
+    }
+    return now
+}
+
+private fun MediaMetadata?.title(): String? = this?.getString(MediaMetadata.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }
+
+private fun MediaMetadata?.artist(): String? =
+    (this?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: this?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST))?.takeIf { it.isNotBlank() }
+
+private fun MediaController.read(): NowPlaying {
+    val data = metadata
+    return NowPlaying(this, data.title(), data.artist(), playing = playbackState?.state == PlaybackState.STATE_PLAYING)
+}
+
+/**
+ * The song, who it is by, and previous · play or pause · next. With notification access the card
+ * talks to the active player directly and knows what is playing. Without it the three controls
+ * still work, as media keys that Android hands to the last-used player, and one line offers the
+ * access that would bring the song's name. [roomy] = a square tall enough for two lines of title.
+ */
+@Composable
+fun MusicTile(resumeCount: Int, hasAccess: Boolean, shape: TileShape, roomy: Boolean, modifier: Modifier = Modifier) {
+    val c = LocalFocusColors.current
+    val context = LocalContext.current
+    val audio = context.getSystemService(AudioManager::class.java)
+    val scope = rememberCoroutineScope()
+    val now = rememberNowPlaying(hasAccess)
+
+    // Only consulted without a controller: the audio system's word on whether something plays.
+    var keyPlaying by remember { mutableStateOf(false) }
+    LaunchedEffect(resumeCount) { keyPlaying = audio?.isMusicActive == true }
+    val playing = now?.playing ?: keyPlaying
+
+    fun key(code: Int) {
+        audio?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+        audio?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+        // The player needs a moment to act on the key before it can be asked whether it plays.
+        scope.launch {
+            delay(400)
+            keyPlaying = audio?.isMusicActive == true
+        }
+    }
+    val controls = now?.controller?.transportControls
+    val wide = shape == TileShape.WIDE
+
+    @Composable
+    fun Song(modifier: Modifier, size: Float, maxLines: Int) {
+        val title = now?.title ?: if (now != null || playing) "Playing" else "Nothing playing"
+        T(
+            title,
+            modifier.then(if (hasColourGlyphs(title)) Modifier.monochrome() else Modifier),
+            size = size.sp, color = if (now?.title != null) c.fg else c.dim, maxLines = maxLines, lineHeight = (size + 4).sp,
+        )
+    }
+
+    @Composable
+    fun AccessHint(text: String) = T(
+        text,
+        Modifier.press { Perms.start(context, Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }.padding(vertical = 4.dp),
+        size = 13.sp, color = c.faint, maxLines = 1,
+    )
+
+    // The signs every player uses, drawn in the text colour. The padding around each makes the
+    // touch target; half a screen is about 120dp inside the card, so they sit closer there.
+    @Composable
+    fun Controls(modifier: Modifier, arrangement: Arrangement.Horizontal) {
+        Row(modifier, horizontalArrangement = arrangement, verticalAlignment = Alignment.CenterVertically) {
+            val button = Modifier.padding(horizontal = if (wide) 14.dp else 10.dp, vertical = if (shape == TileShape.STRIP) 10.dp else 8.dp)
+            val side = if (wide) 16.dp else 14.dp
+            MediaGlyph(Glyph.PREVIOUS, side, c.dim, Modifier.press { controls?.skipToPrevious() ?: key(KeyEvent.KEYCODE_MEDIA_PREVIOUS) }.then(button))
+            MediaGlyph(
+                if (playing) Glyph.PAUSE else Glyph.PLAY, if (wide) 20.dp else 17.dp, c.fg,
+                Modifier.press {
+                    if (controls == null) key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) else if (playing) controls.pause() else controls.play()
+                }.then(button),
+            )
+            MediaGlyph(Glyph.NEXT, side, c.dim, Modifier.press { controls?.skipToNext() ?: key(KeyEvent.KEYCODE_MEDIA_NEXT) }.then(button))
+        }
+    }
+
+    val open = now?.let { playing -> { openPlayer(context, playing.controller) } }
+    when (shape) {
+        TileShape.STRIP -> Strip("Music", modifier, open) {
+            Song(Modifier.weight(1f), size = 14f, maxLines = 1)
+            Controls(Modifier, Arrangement.spacedBy(8.dp))
+        }
+        TileShape.SQUARE -> Tile("Music", modifier, open) {
+            Song(Modifier, size = 15f, maxLines = if (roomy) 2 else 1)
+            if (!hasAccess) AccessHint("Song's name  →")
+            else if (roomy) now?.artist?.let { T(it, size = 13.sp, color = c.dim, maxLines = 1) }
+            Spacer(Modifier.weight(1f))
+            Controls(Modifier.fillMaxWidth(), Arrangement.SpaceBetween)
+        }
+        TileShape.WIDE -> Tile("Music", modifier, open) {
+            Song(Modifier, size = 17f, maxLines = 1)
+            now?.artist?.let { T(it, size = 13.sp, color = c.dim, maxLines = 1) }
+            VSpace(6.dp)
+            Controls(Modifier.fillMaxWidth(), Arrangement.SpaceBetween)
+            if (!hasAccess) AccessHint("Show the song's name  →")
+        }
+    }
+}
+
+private enum class Glyph(val says: String) { PREVIOUS("Previous"), PLAY("Play"), PAUSE("Pause"), NEXT("Next") }
+
+/**
+ * Play, pause, previous, next as the plain shapes they are everywhere: a triangle, two bars, a
+ * triangle against a bar. Drawn, like the work badge, so they stay the text's colour; the Unicode
+ * characters for them turn into colour emoji on many phones.
+ */
+@Composable
+private fun MediaGlyph(glyph: Glyph, side: Dp, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(side).semantics { contentDescription = glyph.says }) {
+        val w = size.width
+        val h = size.height
+        fun triangle(from: Float, to: Float) = drawPath(
+            Path().apply {
+                moveTo(from, 0f)
+                lineTo(to, h / 2)
+                lineTo(from, h)
+                close()
+            },
+            color,
+        )
+        val bar = w * 0.16f
+        when (glyph) {
+            Glyph.PLAY -> triangle(w * 0.12f, w)
+            Glyph.PAUSE -> {
+                drawRect(color, Offset(w * 0.14f, 0f), Size(w * 0.26f, h))
+                drawRect(color, Offset(w * 0.60f, 0f), Size(w * 0.26f, h))
+            }
+            Glyph.NEXT -> {
+                triangle(0f, w - bar - w * 0.06f)
+                drawRect(color, Offset(w - bar, 0f), Size(bar, h))
+            }
+            Glyph.PREVIOUS -> {
+                drawRect(color, Offset(0f, 0f), Size(bar, h))
+                triangle(w, bar + w * 0.06f)
+            }
+        }
+    }
+}
+
+/** The player's own "now playing" screen if it offers one, else just the player. */
+private fun openPlayer(context: Context, controller: MediaController) {
+    try {
+        controller.sessionActivity?.send() ?: context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let { Perms.start(context, it) }
+    } catch (_: Exception) {
+    }
+}
+
+/** A few lines of your own, kept by Focus. A tap edits them. */
+@Composable
+fun NoteTile(note: String, shape: TileShape, maxLines: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalFocusColors.current
+    val shownNote = if (shape == TileShape.STRIP) note.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim() else note
+
+    @Composable
+    fun Words(modifier: Modifier) {
+        if (note.isBlank()) T("Tap to write", modifier, size = 14.sp, color = c.dim, maxLines = 1)
+        else T(shownNote, modifier.then(if (hasColourGlyphs(shownNote)) Modifier.monochrome() else Modifier), size = 14.sp, maxLines = maxLines, lineHeight = 20.sp)
+    }
+    when (shape) {
+        TileShape.STRIP -> Strip("Note", modifier, onClick) { Words(Modifier.weight(1f)) }
+        // Like the alarm beside it: title on top, the words resting on the bottom edge.
+        TileShape.SQUARE -> Tile("Note", modifier, onClick) {
+            Spacer(Modifier.weight(1f))
+            Words(Modifier)
+        }
+        TileShape.WIDE -> Tile("Note", modifier, onClick) { Words(Modifier) }
     }
 }
 

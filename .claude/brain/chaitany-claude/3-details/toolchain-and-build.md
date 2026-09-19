@@ -24,7 +24,9 @@ warnings are therefore expected; do not "fix" them by bumping blindly.
 `debug` · `release` (R8 + resource shrinking, **debug key**) · `dist` (`initWith(release)`,
 release key via `keystore.properties`, `matchingFallbacks += "release"`). `src/debug/
 AndroidManifest.xml` exports `ReviewActivity` and `BlockActivity` for adb in debug builds only.
-APK ≈ 1.37 MB (debug ≈ 9.5 MB). `-opt-in=androidx.compose.foundation.ExperimentalFoundationApi`.
+APK ≈ 1.34 MB (debug ≈ 9.5 MB). `androidResources.localeFilters += "en"`: the app has one
+language, and without the filter the AndroidX libraries ship their strings in 85 (resources.arsc
+93 KB → 19 KB compressed). Add a locale there the day Focus is translated. `-opt-in=androidx.compose.foundation.ExperimentalFoundationApi`.
 
 ## Checks that must stay green
 ```bash
@@ -38,7 +40,7 @@ Compose lints that have bitten: `NonObservableLocale` (use `currentLocale()` fro
 ## Manifest notes
 Permissions: PACKAGE_USAGE_STATS, QUERY_ALL_PACKAGES (a launcher must see every app; also lets
 the service resolve any activity), REQUEST_DELETE_PACKAGES, POST_NOTIFICATIONS, READ_CALENDAR,
-EXPAND_STATUS_BAR. **No INTERNET**: a public promise (site, README), never add it.
+EXPAND_STATUS_BAR. Services: the accessibility service, and `MediaListener` (notification access, optional, empty). **No INTERNET**: a public promise (site, README), never add it.
 `MainActivity`: HOME + DEFAULT, `singleTask`, `clearTaskOnLaunch`, `excludeFromRecents`,
 `stateAlwaysHidden|adjustResize`, portrait. `SettingsActivity`: own task affinity (`…settings`), or a launcher cannot open it (see
 `mistakes-and-lessons.md`). `BlockActivity`: `singleInstance`, own task affinity,

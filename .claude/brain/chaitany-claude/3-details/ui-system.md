@@ -17,6 +17,11 @@ Today / Week and the drawer's Personal / Work; moved here from `ReviewScreen.kt`
 `MultiChoiceDialog`, `ConfirmDialog`, `TextInputDialog(numeric)`, `UnderlinedField`,
 `AppPickerDialog(leading=…)`.
 
+**Drawn pictograms** (the only ones): `WorkBadge` (briefcase, `Basics.kt`) and the music card's
+play / pause / previous / next (`MediaGlyph`, `HomeWidgets.kt`). Canvas shapes in the text colour
+with a `contentDescription`; never the Unicode characters, which many phones turn into colour
+emoji.
+
 ## Touch feedback: it lights up (owner's requirement)
 `PressIndication` (an `IndicationNodeFactory`, installed as `LocalIndication`) draws a rounded
 rect of white at `0.17 × level` with **`BlendMode.Difference`** *behind* the content, so the same
@@ -30,8 +35,17 @@ still sits 30dp from the edge. The animated value is read in the draw phase: no 
 ## Home layout that always fits (`HomeScreen`)
 A home screen must never scroll or push the corner shortcuts off. `BoxWithConstraints` estimates
 the height each arrangement needs from measured constants (dp, × text scale) and picks the
-roomiest `Fit(ring, textSp, padDp, maxEvents, topApps)` that fits: detail is given up before the
-clock is (fewer events, no app names under the bar, then a smaller ring, floor 132dp). Below
+roomiest `Fit` (13 steps) that fits. Given up in this order: card proportions (square → flatter),
+calendar/note lines, hosted-widget height, the ring (×0.88, then 132dp), cards as one-line strips,
+smaller fast-app text, and last of all the cards themselves. **Pinned apps and the corner
+shortcuts are never what gives** (a 5th app was once squeezed out by an under-estimate).
+`heightOf` mirrors the composables row by row (`fixedGap()` is shared by layout and estimate; a
+text line ≈ 1.2 × its size). Safety net: the bottom weighted `Spacer` reports its placed height;
+0 means the fixed content overflowed, and `tighter` steps to the next fit. It only ever steps
+down and is remembered on every input, so it cannot oscillate. Every section that is
+switched on is part of the estimate. The sections are drawn in `Settings.homeOrder`; between them
+sit weighted `Spacer`s, so the leftover height is shared out whatever the order and number
+(screen time, when first, hugs the clock with a fixed 10dp instead). Below
 172dp the ring switches to compact text ("85% charging", smaller type) so the bottom line still
 fits the chord of the circle. Ring arc = battery % (or day fraction), `Animatable` from 0, 900 ms.
 Battery via sticky `ACTION_BATTERY_CHANGED`, registered only while STARTED.

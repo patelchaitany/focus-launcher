@@ -267,3 +267,130 @@ and drawer; corrected to the branch's code (screen time line, swipe right, lock 
 sort, badge, keyboard).
 **Verified:** no conflict markers left; tests, lint and the release build re-run after the merge.
 
+## 2026-09-20 · Alarm, music and note sections; arrange the home screen by dragging (same contributor)
+
+**Asked:** widgets for calendar, music control, notes (a note app's widget if there is one, else
+a default) and alarms; a home screen that adjusts dynamically and that the user can arrange by
+dragging; "do not make it too complicated, remember the aim"; commit nothing without permission.
+A black lock screen built the day before was reverted at their request before any commit and has
+left no trace in the code or the brain.
+**Proposed first, then built:** text sections instead of hosted widgets. `HomeSection` +
+`Settings.homeOrder/showAlarm/showMusic/showNote/note`; `AlarmLine`, `MusicLine`, `NoteLine` in
+`HomeWidgets.kt`; `HomeScreen` draws the shown sections in order with weighted gaps and counts
+each in `heightOf` (`Fit.maxEvents` became `Fit.lines`, shared by calendar and note);
+`ArrangePage` (route `arrange`) for the order and the switches; `TextInputDialog(multiline)`.
+Details: `3-details/home-drawer-menu-setup.md`, `ui-system.md`.
+**Verified:** 19 unit tests, lint 0 errors, release build; installed for user 0; the arrange page
+opens by intent and nothing crashed.
+**Not verified:** dragging on the device, media keys against a real player, the look of a home
+screen with every section on at the smallest fit. No unit test was added: `Settings` JSON needs
+`org.json`, which the JVM test classpath only has as stubs.
+**Open:** track title in the music row would need notification access (a notification listener);
+offered, not built. Nothing committed.
+Same day, after the contributor saw it: "the UI looks like shit", with a picture of two rounded
+cards side by side as the direction. The three rows became cards (`Tile`), the calendar too; rows
+of two narrow cards are built in `HomeScreen` and counted in `heightOf`. Lesson: a row of small
+caps and a value is the settings idiom, not a home-screen one; show a mockup before building a
+new look (one was drawn this time, after the fact). Verified: 19 unit tests, lint 0 errors,
+release build. **Not seen on a device**: the phone was unplugged; install command handed over.
+
+## 2026-09-20 · Song name, arranging on the home screen, hosted widgets (same contributor)
+
+**Asked, after using the cards:** the music card shows no song and looks bad; "if I long press
+anything it should allow me to arrange dynamically"; why are screen time and fast apps in Arrange
+if they are always on; Arrange should let him pick the app for notes and calendar, "at least you
+can show [the] widget of [the] work calendar".
+**Done:** `MediaListener` + rewritten full-width `MusicTile` (title, artist, direct transport
+controls, tap opens the player; media-key fallback). Hold-and-drag on the home column.
+`showScreenTime` / `showApps`: every section has a switch. `HostedWidget.kt` + widget picker in
+`ArrangePage`; `calendarWidget` / `noteWidget`. Mechanisms: `3-details/home-drawer-menu-setup.md`.
+I had told him twice that hosted widgets were out; his organisation's policy does allow the
+calendar and notes apps as cross-profile widget providers, which I only checked when he insisted.
+**Verified:** 19 unit tests, lint 0 errors, release build; installed for user 0; home and the
+arrange page come up without a crash.
+**Not verified (needs his hands):** the drag on the home screen, binding and showing a widget
+(personal and work), the music card against a real player with and without notification access,
+how a greyscaled widget actually looks. Widgets that need a configure step are not configured.
+
+## 2026-09-20 · Shapes, the missing 5th app, one place for calendar settings, performance audit
+
+**Asked:** a tl;dr and whether this is still light ("it should not slow the phone down at all");
+the cards are "all rectangle", they should change between rectangle and square; calendar settings
+exist twice, remove the ones outside Arrange; only 4 of 5 pinned apps show; the widget "change"
+list shows far too many apps; use several agents.
+**Done (three agents by file ownership, one owning the build and the phone):** adaptive card
+shapes and strips, 13-step `Fit` with a measured safety net (`HomeScreen.kt`, `HomeWidgets.kt`);
+calendar rows moved from `HomePage` into `ArrangePage`, relevance-filtered widget picker
+(`HostedWidget.kt`); a read-only performance audit whose two MUST and four SHOULD findings were
+all applied (`3-details/performance.md` → "Second pass").
+**Verified:** 19 unit tests, lint 0 errors, release build, installed for user 0. On the phone, by
+accessibility bounds only and with no input injected: height estimates within about 4dp and on
+the high side; five pinned-app rows and both shortcuts intact; the safety net stepping down when
+the estimate was deliberately scaled by 0.7 in a throw-away build.
+**Not verified:** the final build on screen (the phone was locked); true squares and the 1.3 /
+1.7 proportions (the phone's home screen is too full to reach them); strips; that the song title
+still arrives after `requestUnbind()`; idle frames and CPU with the cards on. One
+10 s sample right after an unlock showed frames and CPU well above zero, but somebody had just
+picked the phone up, so it proves nothing either way; with the screen off the process drew 0
+frames. A second, passive sample then gave six consecutive 5 s windows with the home screen
+in front, on the phone as its owner had it set up (cards on): 14 and 12 frames in the first two
+(arrival), then **0 frames in each of the next four, at 10-20 ms of CPU per window**, a figure
+that includes the two `dumpsys` probes themselves. Idle is still idle. With a hosted widget it
+has to be read per widget: one that animates never idles.
+Later the same night, at the contributor's request ("take screenshots from home page and tell me
+what's wrong"), one guarded screenshot of his home screen (kept in the scratchpad only): five
+apps, badges and the song title were right (so the title survives `requestUnbind()`); the two
+hosted widgets were cut to their headers and their edges did not line up with the cards. Fixed:
+size reported on every height change, a shared panel behind widgets, `Fit.compactTime` (screen
+time as one line) before widgets drop under 110dp, configure activity started after binding.
+A second screenshot showed both widgets with content and one common outer edge. Tests, lint and
+the release build pass. Not verified: a widget's configure flow.
+Then: "why did you have specific dimensions for alarm and music and specific for Notion and
+calendar, it looks bad bad bad". → one grid: all four card sections pair, every card row is
+`cell(fit)` tall, hosted widgets take the cell they are given and are told its size, the own
+calendar has a half-width form. Verified: tests, lint, release build, installed; a guarded
+screenshot with alarm and music on (he had switched the rest off by then) shows two true squares
+under a full-size ring. **Not seen:** a grid with widgets in it, or four cards at once.
+A screenshot with all four cards on showed the 2×2 grid of equal cells working (a list widget's
+last row is cut by its own scrolling, not by Focus). Asked next: how to put alarm beside calendar
+and music beside Notion → pairs follow the order (1st with 2nd, 3rd with 4th), said so at the top
+of Arrange; on the home screen a single card of a pair can now be lifted. And: screen time and
+fast apps always on, no rows for them in Arrange → `showScreenTime` / `showApps` removed again.
+Verified: tests, lint, release build, installed. Not tried: the single-card drag.
+"Why is there 2 calendar?": a screenshot showed two calendar widgets and no notes widget, while
+`dumpsys appwidget` listed exactly one of each bound to Focus. A stale `AndroidView` reused by
+position after a reorder (lesson recorded). Keyed by widget id and by card; the next screenshot
+shows one calendar and the notes widget with its real content. Tests, lint, release build pass.
+
+## 2026-09-20 · Alarm card and calendar widget removed; the calendar is plain text again
+
+**Asked:** "Remove alarm completely as a widget, even calendar; bring back what we had previously
+as the calendar; only the media player and notes one."
+**Done:** `HomeSection.ALARM`, `AlarmTile`, `showAlarm` and the per-minute `nextAlarmClock` read
+deleted. `CalendarWidget` restored byte for byte from the owner's commit; `calendarWidget`, the
+calendar's card/strip/half-width forms and the calendar half of the widget picker deleted; its
+height estimate back to the plain section's. Cards = music + note. Arrange lists calendar, music,
+note; the calendar keeps its "which calendar" and week-strip lines there. `WidgetHost` releases
+bound ids no setting points to (the calendar widget he had picked), once per process.
+**Verified:** 19 unit tests, lint 0 errors, release build, installed for user 0, no crash; two
+guarded screenshots: plain calendar with its week strip, the notes widget and the music card, all
+five apps. The first showed the full-width music card's controls cut off at the low cell height
+→ `rowHeight`; the second shows them whole.
+**Consequence to remember:** the work calendar is off the home screen again (its events are
+closed to personal apps; the widget was the only way in).
+
+## 2026-09-20 · APK size, leftovers, media symbols (same contributor)
+
+**Asked:** is anything redundant, unused or improvable, "as the APK's size got increased"; and
+whether play / pause / prev / next can be symbols instead of words.
+**Done:** measured first (`3-details/performance.md` → "APK size"). English-only resource filter
+(−74 KB). `Fit.widget` removed (a hosted widget takes the grid's cell; one constant where it
+cannot) together with a fit step that had become a duplicate; `ArrangePage`'s `CARD_SECTIONS`
+renamed `LISTED` since the calendar is not a card. Music controls drawn as `MediaGlyph`s.
+**Verified:** 19 unit tests, lint 0 errors, release build 1,341,535 bytes (1.0 was 1,366,063),
+installed for user 0; a guarded screenshot shows the three symbols in the half-width music card
+beside the notes widget, the plain calendar below the apps.
+Last addition of the round, picked from a list of ideas: today's **unlock count** on the screen
+time line ("2% of today · 42 unlocks"; `DayUsage.unlocks`, already collected for the review, so no
+new work per refresh). Tests, lint and the release build pass; installed for user 0.
+

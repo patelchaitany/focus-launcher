@@ -1,16 +1,11 @@
 package com.focus.launcher.ui.settings
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,9 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.focus.launcher.Graph
 import com.focus.launcher.data.AppEntry
-import com.focus.launcher.data.CALENDAR_ALL
-import com.focus.launcher.data.CalendarInfo
-import com.focus.launcher.data.CalendarRepository
 import com.focus.launcher.data.ClockStyle
 import com.focus.launcher.data.FontChoice
 import com.focus.launcher.data.HomeAlign
@@ -52,27 +44,13 @@ private fun update(transform: (Settings) -> Settings) = Graph.settings.update(tr
 
 // ---- Home screen -----------------------------------------------------------------------------
 
-private enum class HomeDialog { NONE, CLOCK, RING, TAP, TIME_FORMAT, ALIGN, LEFT, RIGHT, CALENDAR }
+private enum class HomeDialog { NONE, CLOCK, RING, TAP, TIME_FORMAT, ALIGN, LEFT, RIGHT }
 
 @Composable
 internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Unit, go: (String) -> Unit) {
-    val context = LocalContext.current
     var dialog by remember { mutableStateOf(HomeDialog.NONE) }
     val close = { dialog = HomeDialog.NONE }
     val favoriteCount = settings.favorites.count { key -> apps.any { it.key == key } }
-    // Switching the calendar section on is also the moment to ask for the permission it needs.
-    var calendarGrants by remember { mutableIntStateOf(0) }
-    val askCalendar = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { calendarGrants++ }
-    var calendars by remember { mutableStateOf(emptyList<CalendarInfo>()) }
-    var shownCalendar by remember { mutableStateOf<CalendarInfo?>(null) }
-    var calendarCounts by remember { mutableStateOf(emptyMap<String, Int>()) }
-    LaunchedEffect(settings.showCalendar, settings.calendarKey, calendarGrants) {
-        calendars = CalendarRepository.calendars(context)
-        calendarCounts = CalendarRepository.upcomingCounts(context, calendars)
-        shownCalendar = CalendarRepository.choose(context, settings.calendarKey, calendars)
-    }
-    // A Work profile exists, yet none of its calendars came through: the organisation says no.
-    val workBlocked = remember(calendars) { CalendarRepository.hasWorkProfile(context) && calendars.none { it.work } }
 
     Page("Home screen", onBack) {
         Section("Clock")
@@ -88,31 +66,11 @@ internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Un
         ToggleRow("Show the date", settings.showDate) { v -> update { it.copy(showDate = v) } }
 
         Section("Sections")
-        ToggleRow(
-            "Calendar", settings.showCalendar,
-            subtitle = "Your next events, from one calendar. Emoji in titles are left out.",
-        ) { v ->
-            update { it.copy(showCalendar = v) }
-            if (v && !CalendarRepository.hasAccess(context)) askCalendar.launch(Manifest.permission.READ_CALENDAR)
-        }
         SettingRow(
-            "Calendar to show",
-            subtitle = "Only one is shown at a time. Search the list to find the one you want.",
-            value = if (settings.calendarKey == CALENDAR_ALL) "All" else shownCalendar?.shortName ?: "None found",
-            enabled = settings.showCalendar && calendars.isNotEmpty(),
-            onClick = { dialog = HomeDialog.CALENDAR },
+            "Arrange home screen",
+            subtitle = "Drag the sections into your order. Calendar, next alarm, music controls and a note are switched on and set up here.",
+            onClick = { go(Routes.ARRANGE) },
         )
-        if (settings.showCalendar && workBlocked) {
-            Note(
-                "Calendars inside your Work profile are not listed: the organisation that manages it does not let other " +
-                    "apps read them, and Focus respects that. If you share your work calendar with a personal Google " +
-                    "account, it shows up here like any other calendar.",
-            )
-        }
-        ToggleRow(
-            "Week strip", settings.showWeekStrip, enabled = settings.showCalendar,
-            subtitle = "Monday to Sunday with today marked, above the events.",
-        ) { v -> update { it.copy(showWeekStrip = v) } }
 
         Section("Fast apps")
         SettingRow("Fast apps", subtitle = "Up to $MAX_FAVORITES apps, one tap from the home screen.", value = "$favoriteCount / $MAX_FAVORITES", onClick = { go(Routes.FAST_APPS) })
@@ -129,14 +87,6 @@ internal fun HomePage(settings: Settings, apps: List<AppEntry>, onBack: () -> Un
         HomeDialog.CLOCK -> ChoiceDialog("Clock style", ClockStyle.entries.map { it to it.label }, settings.clockStyle, close) { v -> update { it.copy(clockStyle = v) } }
         HomeDialog.RING -> ChoiceDialog("Ring shows", RingMode.entries.map { it to it.label }, settings.ringMode, close) { v -> update { it.copy(ringMode = v) } }
         HomeDialog.TAP -> ClockTapDialog(settings, apps, close)
-        HomeDialog.CALENDAR -> CalendarPickerDialog(
-            calendars = calendars,
-            upcomingCounts = calendarCounts,
-            selectedKey = if (settings.calendarKey == CALENDAR_ALL) CALENDAR_ALL else shownCalendar?.key,
-            workProfileBlocked = workBlocked,
-            onDismiss = close,
-            onPick = { key -> update { it.copy(calendarKey = key) } },
-        )
         HomeDialog.TIME_FORMAT -> ChoiceDialog("Time format", TimeFormat.entries.map { it to it.label }, settings.timeFormat, close) { v -> update { it.copy(timeFormat = v) } }
         HomeDialog.ALIGN -> ChoiceDialog("Alignment", HomeAlign.entries.map { it to it.label }, settings.homeAlign, close) { v -> update { it.copy(homeAlign = v) } }
         HomeDialog.LEFT, HomeDialog.RIGHT -> {

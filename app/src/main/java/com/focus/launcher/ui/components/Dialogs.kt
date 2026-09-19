@@ -180,6 +180,8 @@ fun TextInputDialog(
     subtitle: String? = null,
     confirmLabel: String = "Save",
     numeric: Boolean = false,
+    /** Several lines: Enter makes a new line, "Save" is the only way to confirm. */
+    multiline: Boolean = false,
     onConfirm: (String) -> Unit,
 ) {
     var value by remember { mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length))) }
@@ -194,16 +196,17 @@ fun TextInputDialog(
             onValueChange = { next -> value = if (numeric) next.copy(text = next.text.filter(Char::isDigit).take(4)) else next },
             placeholder = placeholder,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp).focusRequester(focus),
-            imeAction = ImeAction.Done,
+            imeAction = if (multiline) ImeAction.Default else ImeAction.Done,
             keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
             onImeAction = submit,
+            singleLine = !multiline,
         )
         DialogButtons(onDismiss, confirmLabel, onConfirm = submit)
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
-/** Single-line text field: just text, a cursor and a line under it. */
+/** Text field: just text, a cursor and a line under it. One line unless told otherwise. */
 @Composable
 fun UnderlinedField(
     value: TextFieldValue,
@@ -213,13 +216,15 @@ fun UnderlinedField(
     imeAction: ImeAction = ImeAction.Done,
     keyboardType: KeyboardType = KeyboardType.Text,
     onImeAction: () -> Unit = {},
+    singleLine: Boolean = true,
 ) {
     val c = LocalFocusColors.current
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
-        singleLine = true,
+        singleLine = singleLine,
+        maxLines = if (singleLine) 1 else 6,
         textStyle = focusTextStyle(size = 19.sp),
         cursorBrush = SolidColor(c.fg),
         keyboardOptions = KeyboardOptions(

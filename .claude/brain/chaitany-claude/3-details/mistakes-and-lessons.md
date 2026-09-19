@@ -73,6 +73,27 @@ Each entry: symptom → cause → fix / rule. Add to this whenever something cos
   difficult (`brain-upkeep.md`).
 
 ## Android platform
+- **The same widget appeared twice and another not at all** after cards changed places. An
+  `AndroidView` keeps the view its `factory` made, and composables in a `for` loop are remembered
+  by position: the slot that used to hold widget A was handed widget B's id and went on showing
+  A. `dumpsys appwidget` (which ids are bound to the host) told a display bug from a binding bug
+  in one look. → `key(id)` around the `AndroidView`, `key(card)` around each card in the row.
+- **Hosted widgets showed only their header.** Two causes, seen on a screenshot of a full home
+  screen: the fit had squeezed them to 80dp, and the size was only reported once, at creation, so
+  they kept drawing for 190dp. → `updateAppWidgetSize` in `AndroidView.update`; 110dp floor while
+  anything else can still give. Look at a real screenshot before calling a layout done.
+- **The 5th pinned app vanished** once several cards were on: `heightOf` under-estimated and a
+  Column quietly starves its last children. → estimates that mirror the composables, plus a
+  measured safety net (`ui-system.md`). A layout that "always fits" needs a check, not only maths.
+- For on-device geometry, `uiautomator dump` bounds of *clickable* nodes are inflated to 48dp;
+  use the text nodes.
+- The name of the playing song is only available through `MediaSessionManager.getActiveSessions`,
+  which demands an enabled `NotificationListenerService`. Media *keys* need nothing.
+- A managed work profile may close its calendar *data* to personal apps and still allow the
+  calendar app's *widget* (`crossProfileWidgetProviders` in `dumpsys device_policy`). Check both
+  before telling someone their work calendar cannot be shown.
+- A child composable handles a pointer event before its parent in the Main pass. A parent that
+  must stop a child's tap (end of a long-press drag) has to consume in the **Initial** pass.
 - `makeCustomAnimation` is ignored for task-level opens since Android 13; scale-up / clip-reveal
   are honoured.
 - `TRIM_MEMORY_UI_HIDDEN` fires on every app launch from a launcher.

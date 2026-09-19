@@ -96,6 +96,8 @@ class UsageRepository(private val context: Context, private val apps: () -> AppR
     @Volatile private var todayComputedAt = 0L
     @Volatile private var ignoredCache: Set<String>? = null
     private var accumulator: DayAccumulator? = null
+    private var sortCache: Map<String, Pair<Long, Long>>? = null
+    private var sortCacheAt = 0L
 
     fun hasAccess(): Boolean {
         val ops = context.getSystemService(AppOpsManager::class.java) ?: return false
@@ -125,6 +127,7 @@ class UsageRepository(private val context: Context, private val apps: () -> AppR
     @Synchronized
     fun trimMemory() {
         ignoredCache = null
+        sortCache = null
     }
 
     @Synchronized
@@ -223,12 +226,17 @@ class UsageRepository(private val context: Context, private val apps: () -> AppR
      * from the system's own aggregates. Only orders the drawer ("most used", "recent").
      */
     // ponytail: system aggregates, not the ForegroundTracker; exact minutes do not matter for an order.
+    @Synchronized
     fun sortStats(days: Int = 7): Map<String, Pair<Long, Long>> {
         if (!hasAccess()) return emptyMap()
         val now = System.currentTimeMillis()
+        // The drawer asks every time it opens. The very same map back means nothing re-sorts and
+        // the list does not jump; an order can be five minutes behind without anyone noticing.
+        sortCache?.takeIf { now - sortCacheAt in 0..300_000 }?.let { return it }
         return try {
             usm.queryAndAggregateUsageStats(now - days * 24 * DayUsage.HOUR_MS, now)
                 .mapValues { (_, s) -> s.totalTimeInForeground to s.lastTimeUsed }
+                .also { sortCache = it; sortCacheAt = now }
         } catch (_: Exception) {
             emptyMap()
         }
