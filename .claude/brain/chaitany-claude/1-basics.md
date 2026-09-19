@@ -1,7 +1,7 @@
 # Tier 1 · Basics (read all of it, every time)
 
 **Focus** is a text-only, strictly black-and-white Android launcher (Kotlin + Jetpack Compose, no
-Material, package `com.focus.launcher`, 35 Kotlin files, ~6,800 lines). Home = battery ring clock,
+Material, package `com.focus.launcher`, 35 Kotlin files, ~7,000 lines). Home = battery ring clock,
 today's screen time in words under it, one-calendar agenda, up to 5 fast apps, 2 corner shortcuts.
 Swipe left = searchable app list (sortable; Personal / Work tabs), swipe right = the phone's web
 search, double tap = lock. Social apps and games get daily timers that lock the app; a weekly
@@ -42,7 +42,8 @@ device or what is on his phone lives only in the git-ignored `private/` folder n
 | Signing key / its password | outside the repo / both named in `keystore.properties` (ignored) |
 | Deploy target | `site/deploy.env` (ignored) |
 | Server, device and phone specifics | `private/` (ignored) |
-| Live site · repo | https://how2me.me/focusapp/ · https://github.com/patelchaitany/focus-launcher |
+| CI · publish · release check | `.github/workflows/` `build.yml` · `publish.yml` · `verify-release.yml` |
+| Live site · repo · releases | https://how2me.me/focusapp/ · https://github.com/patelchaitany/focus-launcher · `/releases` |
 
 ## Commands
 ```bash
@@ -56,19 +57,24 @@ Three build types: `debug`, `release` (owner's phone), `dist` (public). `dist` c
 over `release` or the reverse: different signatures. JDK: Gradle 8.14 cannot run on JDK 25;
 `gradle.properties` pins a JDK 21 path.
 
-## State of the world (2026-09-19)
-App 1.0 on the phone (release build, speed-profile). The accessibility service has **not been
-enabled** yet, so mid-session locking is untested on a device. Site live, IndexNow submitted,
-Google Search Console not done (needs the owner). Repo public, **no LICENSE** (owner to decide).
+## State of the world (2026-09-19, late evening)
+**Version 1.1** (`versionCode` 2) is on the owner's phone (release build, speed-profile), on the
+site, and on the GitHub release page next to 1.0. It contains a collaborator's merged PR #1
+(drawer sort and Personal / Work tabs, swipe right = web search, a drawn work badge, today's
+screen time in words instead of the 24-hour bar on home). The owner asked for it to be shipped;
+the points in it that touch his earlier decisions still wait for his word (open decisions 10–14).
+CI builds every push and pull request. **CI publishing** (site + release page, after the owner's
+approval) is built but off until he runs `site/setup-ci-publishing.sh`; agents never run it.
+Versions are `<base>.<commit count>` from 2026-09-20 on.
+The accessibility service has **not been enabled** on the phone, so mid-session locking and double
+tap to lock are untested there. Google Search Console not done. **No LICENSE** (owner to decide).
 The brain is committed and public, and was fact-checked against the code, the repo and the live
 site on 2026-09-19 (`3-details/brain-upkeep.md`). Publishing happens on request: `git status`
 shows whether there is unpushed work.
-A contributor's gesture and drawer changes (later session, same day) are **not verified on a
-device**: see the last journal entry.
 
 ## Tier 2 index: read the area(s) you will touch
 - `2-overview/user-and-decisions.md` — what the owner asked for and decided; open decisions
 - `2-overview/app.md` — architecture, features and where each lives
 - `2-overview/device-testing.md` — building, installing, verifying on the phone safely
 - `2-overview/website-and-server.md` — the site, the server, deployment, search
-- `2-overview/github-and-release.md` — the public repo, signing, what stays private
+- `2-overview/github-and-release.md` — the public repo, CI, releases, signing, what stays private

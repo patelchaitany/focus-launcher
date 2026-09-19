@@ -34,8 +34,12 @@
 | Three-tier brain, mandatory, updated after every task | This directory |
 | **The brain is public** (2026-09-19: "no need to make it private") | Committed with the project. Consequence: server, device and phone specifics live only in git-ignored `private/` |
 | **The brain holds everything done so far** (2026-09-19: "update the brain [with] what you have done up till this point") | Not only the last task: every feature and area of work has a home in some tier, checked against the code. How: `3-details/brain-upkeep.md` |
+| **Ship the collaborator's work** (2026-09-19: "there are new commit check them and push the new app in my phone as well as on the server download") | PR #1 was reviewed, built, released as **1.1**, installed on his phone and published on the site. "Check them" = a review first (`3-details/ci-and-releases.md`). The points in it that touch his earlier decisions stay open below (10–14): shipping was asked for, those were not answered |
+| **A release page with the APK** | GitHub releases, tag per version, the same APK as the website with its checksum; 1.0 and 1.1 are there |
+| **CI that builds an APK on GitHub** | Tests, lint and an APK on every push and pull request; that APK is signed with a throwaway key |
+| **The site gets the latest APK when CI has built it** (2026-09-20), **automatically, with his approval** (chosen from three options) | `publish.yml`: signs with the real key, uploads, creates the release, after he approves the run. Keys live in a protected GitHub environment; the server upload key can only deliver site files. He switches it on himself with `site/setup-ci-publishing.sh` |
 
-## Asked for by a contributor (2026-09-19, on a clone; not yet seen by the owner)
+## Asked for by a contributor (2026-09-19, on a clone); shipped in 1.1 at the owner's request
 | Request | What was done |
 | --- | --- |
 | Double tap locks the screen | Existed already; the default is now on. Needs the accessibility service; without it a toast, and Settings → Gestures points to Setup |
@@ -61,17 +65,33 @@ else *unsure* and left alone. Details: `3-details/app-classification.md`.
 3. **Google Search Console** verification (needs his Google account).
 4. A link to `/focusapp/` from the how2me.me homepage (his other site; offered, not edited).
 5. Commit author address: his global git identity is used; GitHub's noreply alternative offered.
-6. `gradle.properties` pins a local JDK path: a fresh clone elsewhere fails until it is removed.
-7. No GitHub Release with the APK attached.
+6. `gradle.properties` pins a local JDK path: a fresh clone elsewhere fails until it is removed
+   or overridden (`-Dorg.gradle.java.home=…`, which is what CI does).
+7. ~~No GitHub Release with the APK attached.~~ Done 2026-09-19 (1.0 and 1.1).
 8. The accessibility service is not enabled on his phone, so mid-session locking is untested.
 9. One observation about the main site's configuration, unrelated to Focus: `private/server.md`.
 10. **The work marker is now a drawn briefcase glyph**, at the contributor's repeated request: the
     first exception to the owner's "no icons". Owner's call whether it stays.
 11. **"Swipe left = Google search" was interpreted** as finger-right (the page left of home).
     Confirm; the other reading would take the drawer's gesture.
-12. Whether the owner wants the contributor's changes and the new defaults (double tap to lock on,
-    swipe right on) at all: he has not seen them.
+12. The owner asked for the contributor's changes to be shipped (1.1), so they are wanted as a
+    whole. Still unconfirmed one by one: the new defaults (double tap to lock on, swipe right on).
+    His own phone keeps its stored `doubleTapLock` value; swipe right is new and therefore on.
 13. Drawer tabs: pausing / resuming the work profile from the drawer is not implemented, and the
     tabs cannot be swiped between (the horizontal swipe belongs to the pager).
-14. **The 24-hour bar is no longer on the home screen** (contributor's request, no setting). The
-    site and its mockups still show it. Keep, revert, or bring back as an option: owner's call.
+14. **The 24-hour bar is no longer on the home screen** (contributor's request, no setting). It
+    was part of the owner's original sketch. The site's home mockup and copy were changed to match
+    1.1; the review still has the bar. Keep, revert, or bring back as an option: owner's call.
+15. Early installs used plain `adb install`, which installs for **every** Android user on a
+    phone. On the owner's phone Focus is therefore also present in the profiles besides his own.
+    Removing it there is a per-user uninstall: reported, waiting for his yes. Installs now use
+    `--user 0`.
+16. **CI publishing waits for one command from him**: `site/setup-ci-publishing.sh` (it handles
+    his signing key and a new server key, so an agent must not run it, **also not when he says
+    "run it"**: he did, 2026-09-20, and was given the reason and the Run button instead). Until
+    then new versions are still published by hand. After it: `gh workflow run publish.yml`, then
+    his Approve click; the agent can verify the result (environment, secret *names*, site,
+    release) without touching a secret.
+17. `main` has no branch protection: anyone with write access can push to it directly. With the
+    approval gate nothing gets published without him, so this is about history, not about safety.
+    Offered: require a pull request for `main`.

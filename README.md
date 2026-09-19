@@ -9,7 +9,9 @@ little as possible. No icons, no colour: black and white, the time, up to five a
 and an honest picture of where the day went. It locks social apps and games when their daily time
 is up, and once a week it shows you the week you actually had.
 
-**[Website](https://how2me.me/focusapp/)** · **[Download the APK](https://how2me.me/focusapp/focus-launcher-1.0.apk)** (1.3 MB, Android 8.0+) · no ads, no account, **no internet permission**
+**[Website](https://how2me.me/focusapp/)** · **[Download the APK](https://github.com/patelchaitany/focus-launcher/releases/latest)** (1.3 MB, Android 8.0+) · **[All releases](https://github.com/patelchaitany/focus-launcher/releases)** · no ads, no account, **no internet permission**
+
+[![Build](https://github.com/patelchaitany/focus-launcher/actions/workflows/build.yml/badge.svg)](https://github.com/patelchaitany/focus-launcher/actions/workflows/build.yml)
 
 Built with Kotlin and Jetpack Compose, without the Material library, in about 6,500 lines.
 
@@ -136,6 +138,34 @@ Two machine-specific files:
 - `gradle.properties` → `org.gradle.java.home` is pinned to Homebrew's JDK 21, because Gradle 8.14
   cannot run on JDK 25. Remove or edit that line on another machine.
 
+**Continuous integration.** Every push to `main` and every pull request runs the unit tests,
+lint and an optimized build on GitHub Actions (`.github/workflows/build.yml`), and the APK can be
+downloaded from the run's page for 30 days. That APK is signed with a throwaway key made by the
+runner: good for trying a change, but it is not the official download and cannot be installed
+over it (or the other way round). This workflow uses no secrets, so it is safe for pull requests
+from anyone; the real key is only ever used by the Publish workflow below. It passes the runner's
+JDK with `-Dorg.gradle.java.home`, which overrides the pinned path above without touching a
+tracked file.
+
+**Versions.** `baseVersion` in `app/build.gradle.kts` is chosen by a human; the build number is the
+number of commits (`1.1.13` = base 1.1, 13 commits), and it is also the `versionCode`. A build from
+a newer commit therefore always installs over an older one, and nobody has to remember to bump
+a number before publishing.
+
+**Publishing from CI** (`.github/workflows/publish.yml`). A push to `main` that changes the app
+or the site starts a run that **waits for the owner's approval**. Once approved it runs the tests
+and lint, builds and signs the APK with the real release key, refuses to go on unless the APK
+carries the release certificate, the expected version and no INTERNET permission, rebuilds the
+site around it, uploads it, downloads it again to compare checksums, and creates the release.
+The signing key and the upload key are secrets of the GitHub environment `release`, which hands
+them only to runs its required reviewer (the owner) approved, and only from `main`. The upload
+key is not a login: on the server it is tied to one fixed command, `site/server/receive.sh`,
+which accepts a flat archive of site files and refuses everything else. One version is one
+binary: if the release for a version already exists, its APK is put on the site again instead of
+building a second file with the same version. Switched on (and off) by the owner with
+`site/setup-ci-publishing.sh`, which handles the keys on his machine and prints none of them;
+until then the workflow skips itself.
+
 Library versions are deliberately one step behind the newest: Compose 1.12 / core 1.19 /
 lifecycle 2.11 require compileSdk 37 and AGP 9.1+. See `gradle/libs.versions.toml`.
 
@@ -160,6 +190,19 @@ the APK).
 
 `deploy.sh` re-downloads the APK afterwards and compares its SHA-256 with the local build, so a
 bad upload fails loudly. The page shows that same checksum.
+
+**Releases.** Every published version is also on the
+[release page](https://github.com/patelchaitany/focus-launcher/releases), with the same APK as
+the website (identical SHA-256) and a `.sha256` file. When a release is published,
+`.github/workflows/verify-release.yml` downloads its APKs and fails unless each one is signed
+with the project's release key (certificate SHA-256
+`526a00b874660af4266699d5795a457ddebe958a78484820fac4b61b2a4852a2`; check any APK yourself with
+`apksigner verify --print-certs`). Releases are normally made by the Publish workflow (see
+Building). By hand, from the machine that has the key: run the tests and lint,
+`./gradlew :app:assembleDist && site/deploy.sh`, tag `v<version>`, then
+`gh release create v<version> focus-launcher-<version>.apk focus-launcher-<version>.apk.sha256`
+with the files from `site/public/`. `deploy.sh` refuses to upload an APK that differs from an
+existing release of the same version.
 
 - **Being found.** The `<title>`, description and an eyebrow inside the `<h1>` carry the phrase
   people search for ("minimalist launcher for Android"); the visible headline stays the owner's

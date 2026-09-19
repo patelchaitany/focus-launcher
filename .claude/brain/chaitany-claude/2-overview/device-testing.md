@@ -32,6 +32,15 @@ unlock it.
 6. **Restarting the launcher:** `am force-stop` leaves it stopped if the phone is locked. Follow it
    with `adb shell am start -n com.focus.launcher/.MainActivity`.
 
+## After an install, while the phone is in use
+`adb install` kills the launcher's process; the system starts it again the next time the owner
+goes home. Do not start `MainActivity` yourself while another app is in front: it would pull him
+out of what he is doing. A passive loop does the rest: wait until `pidof com.focus.launcher`
+has existed for ~20 s (profileinstaller has written the profile by then), run
+`cmd package compile -m speed-profile -f`, and only if Focus is *not* in front `am kill` it so the
+next start uses the compiled code. Then read `logcat -b crash` for the package (count only).
+Always `adb install --user 0 -r`: a plain install goes into every profile on the phone.
+
 ## Which build goes on the phone
 `release` (optimized, debug-key signed) + `cmd package compile -m speed-profile -f`. Debuggable
 Compose is visibly janky and reads as "not smooth". `debug` only for short verification that needs

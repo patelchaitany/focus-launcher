@@ -39,6 +39,13 @@ back. Not done: Google Search Console (owner's account), a link from the how2me.
 mentions on other sites. **Never promise rankings**: brand queries in days, long-tail in weeks,
 the head term in months and only with inbound links.
 
+## Keeping the page true to the app
+The home mockup in the hero is hand-written HTML/CSS and must show what the published version
+shows. 1.1 replaced the 24-hour bar on home with "Screen Time / total / N% of today"
+(`.screen-time` in `style.css`); the copy, the FAQ-derived JSON-LD and the feature list in
+`build.sh` were changed with it. Under the download button the page links to the GitHub release
+page ("Every version, with checksums").
+
 ## Rules
 No real phone screenshots on the page. No inline styles or scripts (CSP would block them; JSON-LD
 data blocks are fine). Keep server details out of anything committed, this brain included.

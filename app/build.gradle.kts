@@ -7,6 +7,20 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// The version people see is "<base>.<build>". The base is chosen by a human. The build number is
+// the number of commits, so a build from a newer commit always installs over every older one and
+// nobody has to remember to bump a number before publishing. Outside a git checkout (a source
+// archive) the build number is unknown and the version falls back to the base alone.
+val baseVersion = "1.1"
+val buildNumber: Int = try {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toIntOrNull() ?: 0
+} catch (_: Exception) {
+    0
+}
+
 android {
     namespace = "com.focus.launcher"
     compileSdk = 36
@@ -15,8 +29,9 @@ android {
         applicationId = "com.focus.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // 1.1 was published with versionCode 2; commit counts passed that long ago.
+        versionCode = maxOf(buildNumber, 2)
+        versionName = if (buildNumber > 0) "$baseVersion.$buildNumber" else baseVersion
     }
 
     // The key for anything that leaves this machine. keystore.properties (git-ignored) says where

@@ -1,0 +1,72 @@
+name: Verify release
+
+# When a release is published (or edited), download every APK attached to it and check that it is
+# signed with the project's release key, and that it matches its .sha256 file if one is attached.
+# A red run here means an APK on the release page did not come from the owner's signing key.
+#
+# The fingerprint below is public information: it can be read from any official APK with
+#   apksigner verify --print-certs focus-launcher-<version>.apk
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to check, for example v1.1
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_CERT_SHA256: 526a00b874660af4266699d5795a457ddebe958a78484820fac4b61b2a4852a2
+
+jobs:
+  verify:
+    name: Check the attached APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download the release's APKs and checksum files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets --pattern '*.apk' --pattern '*.sha256'
+          ls -l assets
+
+      - name: Signed with the release key, and matching their checksums
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$apksigner" ]; then echo "::error::apksigner not found under ANDROID_HOME=$ANDROID_HOME"; exit 1; fi
+          echo "using $apksigner"
+          status=0
+          shopt -s nullglob
+          apks=(assets/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then echo "::error::no APK attached to this release"; exit 1; fi
+          for apk in "${apks[@]}"; do
+            name=$(basename "$apk")
+            if ! out=$("$apksigner" verify --print-certs "$apk" 2>&1); then
+              echo "$out"; echo "::error::$name does not verify"; status=1; continue
+            fi
+            # The wording before "certificate" differs between apksigner versions
+            # ("Signer #1", "Signer (minSdkVersion=24, maxSdkVersion=...)"), so match on the rest.
+            echo "$out" | grep -i "certificate" || true
+            certs=$(printf '%s\n' "$out" | sed -n 's/.*certificate SHA-256 digest: *//p' | sort -u)
+            if [ "$certs" = "$RELEASE_CERT_SHA256" ]; then
+              echo "ok   $name is signed with the release key"
+            else
+              echo "::error::$name is not signed with the release key alone (found: ${certs:-nothing})"; status=1
+            fi
+            if [ -f "$apk.sha256" ]; then
+              if (cd assets && sha256sum --check --status "$name.sha256"); then
+                echo "ok   $name matches $name.sha256"
+              else
+                echo "::error::$name does not match $name.sha256"; status=1
+              fi
+            fi
+            echo "- \`$name\`: sha256 \`$(sha256sum "$apk" | cut -d' ' -f1)\`, signer \`${certs:-unknown}\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit $status

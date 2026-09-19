@@ -1,13 +1,19 @@
 #!/bin/bash
 # Assembles site/public from site/src plus the signed APK.
 # Usage: site/build.sh            (expects ./gradlew :app:assembleDist to have been run)
+#        FOCUS_APK=/path/to.apk site/build.sh     (publish that APK instead, e.g. a release asset)
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=..
-APK_SRC="$ROOT/app/build/outputs/apk/dist/app-dist.apk"
+APK_SRC="${FOCUS_APK:-$ROOT/app/build/outputs/apk/dist/app-dist.apk}"
 [ -f "$APK_SRC" ] || { echo "Build the APK first:  ./gradlew :app:assembleDist" >&2; exit 1; }
 
-VERSION=$(grep -E '^\s*versionName\s*=' "$ROOT/app/build.gradle.kts" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+# The version on the page is read out of the APK itself, so the two can never disagree.
+SDK="${ANDROID_HOME:-$(sed -n 's/^sdk\.dir=//p' "$ROOT/local.properties" 2>/dev/null || true)}"
+AAPT2=$(ls "$SDK"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)
+[ -n "$AAPT2" ] || { echo "aapt2 not found: set ANDROID_HOME, or sdk.dir in local.properties" >&2; exit 1; }
+VERSION=$("$AAPT2" dump badging "$APK_SRC" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+[ -n "$VERSION" ] || { echo "could not read versionName from $APK_SRC" >&2; exit 1; }
 APK_FILE="focus-launcher-$VERSION.apk"
 
 rm -rf public && mkdir -p public
@@ -20,7 +26,8 @@ rsvg-convert -w 1200 -h 630 src/og.svg -o public/og.png
 rsvg-convert -w 180 -h 180 src/favicon.svg -o public/icon-180.png
 
 SHA256=$(shasum -a 256 "public/$APK_FILE" | cut -d' ' -f1)
-BYTES=$(stat -f %z "public/$APK_FILE" 2>/dev/null || stat -c %s "public/$APK_FILE")
+# Not `stat`: on Linux `stat -f` means "file system", succeeds, and prints something else entirely.
+BYTES=$(wc -c < "public/$APK_FILE" | tr -d ' ')
 SIZE=$(python3 -c "print(f'{$BYTES/1048576:.1f} MB')")
 echo "$SHA256  $APK_FILE" > "public/$APK_FILE.sha256"
 
@@ -57,7 +64,7 @@ app = {
     'featureList': [
         'Text-only, black and white home screen without icons',
         'Daily time limits that lock social media apps and games',
-        'Screen time shown as a 24-hour bar on the home screen',
+        'Today\'s screen time in plain words on the home screen, hour by hour in the review',
         'Weekly screen time review',
         'App search, rename and hide',
         'No internet permission, no account, no ads',

@@ -161,6 +161,12 @@ code { font: 0.8rem/1.6 var(--mono); color: var(--fg); word-break: break-all; }
 .clock-text .date { font-size: 3.7cqw; color: var(--dim); }
 .clock-text .battery { font-size: 3cqw; color: var(--faint); margin-top: 0.8cqw; }
 
+/* today's screen time, in words, under the clock */
+.screen-time { display: grid; justify-items: center; gap: 0.5cqw; margin: -2.5cqw 0 8cqw; }
+.screen-time .st-title { font-size: 3.8cqw; color: var(--dim); }
+.screen-time .st-total { font-size: 6.1cqw; line-height: 1.15; }
+.screen-time .st-share { font-size: 3.3cqw; color: var(--dim); }
+
 .block { margin-bottom: 5.5cqw; }
 .block .big { font-size: 5.2cqw; }
 .block .big small { font-size: 3cqw; }

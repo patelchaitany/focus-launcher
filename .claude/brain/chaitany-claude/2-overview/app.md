@@ -71,8 +71,9 @@ ui/     theme/ components/ home/ drawer/ block/ review/ settings/   + Launching.
 
 ## Quality bar
 19 unit tests pass; `lintDebug` = 0 errors (remaining warnings are "newer version available",
-deliberate: newer AndroidX needs compileSdk 37 + AGP 9.1). 35 Kotlin files, 6,813 lines.
-Release APK = 1,366,063 bytes (≈ 1.37 MB). Version 1.0 (`versionCode` 1).
+deliberate: newer AndroidX needs compileSdk 37 + AGP 9.1). 35 Kotlin files, 6,957 lines.
+Release APK = 1,366,083 bytes (≈ 1.37 MB). Version **1.1** (`versionCode` 2) since 2026-09-19;
+1.0 was 1,366,063 bytes. The same checks run on GitHub for every push and pull request.
 
 ## Tier 3 pointers
 `usage-tracking.md` · `app-classification.md` · `timers-wall-consent.md` · `weekly-review.md` ·

@@ -44,7 +44,7 @@
       <a class="button primary" href="{{APK_FILE}}" download>Download for Android</a>
       <a class="button" href="#install">How to install</a>
     </div>
-    <p class="fineprint">APK · {{SIZE}} · version {{VERSION}} · Android 8.0 or newer<br>Free. No account. No ads. No internet permission.</p>
+    <p class="fineprint">APK · {{SIZE}} · version {{VERSION}} · Android 8.0 or newer<br>Free. No account. No ads. No internet permission.<br><a href="https://github.com/patelchaitany/focus-launcher/releases">Every version, with checksums, on GitHub</a></p>
   </div>
 
   <figure class="phone-wrap" aria-label="The Focus home screen">
@@ -58,10 +58,10 @@
             <span class="battery">72%</span>
           </div>
         </div>
-        <div class="block">
-          <div class="row-between"><span class="cap">Screen time</span><span class="big">2h 41m <small>of 24h</small></span></div>
-          {{DAYBAR}}
-          <div class="scale"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+        <div class="screen-time">
+          <span class="st-title">Screen Time</span>
+          <span class="st-total">2h 41m</span>
+          <span class="st-share">11% of today</span>
         </div>
         <div class="block">
           <div class="row-between"><span class="cap">Calendar</span><span class="tiny">Work</span></div>
@@ -95,7 +95,7 @@
   <p class="label">On the home screen</p>
   <dl>
     <div><dt>The ring is your battery</dt><dd>Tap it to open one app of your choice. Long-press to change which.</dd></div>
-    <div><dt>One bar for the 24 hours of today</dt><dd>The white part is the time you spent on your phone. Nothing else.</dd></div>
+    <div><dt>Today's screen time, in plain words</dt><dd>The total, and its share of the day's 24 hours, right under the clock. Tap it for the hour-by-hour picture.</dd></div>
     <div><dt>Your next events</dt><dd>From a single calendar you pick, with the emoji left out.</dd></div>
     <div><dt>Five apps, two corners</dt><dd>The few you actually need, in words. Phone and camera in the corners.</dd></div>
   </dl>
@@ -110,6 +110,7 @@
     <ul>
       <li>Search understands names, initials and typos. Swipe up from home and start typing.</li>
       <li>Anything installed in the last 24 hours sits on top, so new apps are never lost.</li>
+      <li>Sort the list A–Z, by most used or by most recent. With a work profile, personal and work apps get their own tabs.</li>
       <li>Long-press an app to give it a timer, rename it, hide it, or pin it to your home screen.</li>
       <li>Apps with a daily limit show how much is left, right in the list.</li>
     </ul>
@@ -213,7 +214,7 @@
   <p>Focus is a text-based launcher in that family, alongside Olauncher, Niagara, Before Launcher and minimalist phone. If you have tried one of those, you already know the feeling. Its own take comes down to three things:</p>
   <ul class="plain">
     <li><strong>The app blocker is built in.</strong> Daily time limits are part of the launcher itself, so there is no second digital wellbeing app to install, configure or pay for.</li>
-    <li><strong>It shows you the truth.</strong> Your screen time sits on the home screen as one plain bar, and once a week it becomes a review you cannot scroll past.</li>
+    <li><strong>It shows you the truth.</strong> Your screen time sits on the home screen as one plain number, and once a week it becomes a review you cannot scroll past.</li>
     <li><strong>It cannot leak anything.</strong> No internet permission, no account, no ads, no subscription. The whole launcher is 1.3 MB.</li>
   </ul>
 </section>
@@ -234,7 +235,7 @@
     <thead><tr><th scope="col">Permission</th><th scope="col">What it is for</th></tr></thead>
     <tbody>
       <tr><th scope="row">Home app</th><td>Being the screen you land on when you press Home.</td></tr>
-      <tr><th scope="row">Usage access</th><td>Counting screen time. The day bar, the timers and the weekly review all come from it.</td></tr>
+      <tr><th scope="row">Usage access</th><td>Counting screen time. Today's total, the timers and the weekly review all come from it.</td></tr>
       <tr><th scope="row">Accessibility service</th><td>Locking an app <em>while you are inside it</em>. The service is told only the name of the app in front. It is declared unable to read window content, so it cannot see what is on your screen.</td></tr>
       <tr><th scope="row">Notifications <small>optional</small></th><td>One thing: telling you the weekly review is ready.</td></tr>
       <tr><th scope="row">Calendar <small>optional</small></th><td>Showing your next events on the home screen.</td></tr>

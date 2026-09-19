@@ -1,0 +1,219 @@
+name: Publish
+
+# Puts a new build on the website (how2me.me/focusapp) and on the release page.
+#
+# It runs for pushes to main that change the app or the site, and it WAITS FOR THE OWNER: the job
+# uses the "release" environment, which has a required reviewer. GitHub hands that environment's
+# secrets (the real signing key, a restricted upload key for the server) only to a run the owner
+# has approved, so nothing anybody merges is signed or published without that click.
+#
+# Until site/setup-ci-publishing.sh has been run once on the owner's machine, the repository
+# variable FOCUS_PUBLISHING is not "on" and this workflow skips itself.
+#
+# One version = one binary: if the release for this version already exists, its APK is put on the
+# site again instead of building a second, different file with the same version.
+#
+# Actions are pinned to exact commits (the comment names the version): a moved tag cannot change
+# what runs next to the signing key. Dependabot proposes the updates (.github/dependabot.yml).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'site/**'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://how2me.me/focusapp
+  # Public information: the SHA-256 of the release certificate. Anything published must carry it.
+  RELEASE_CERT_SHA256: 526a00b874660af4266699d5795a457ddebe958a78484820fac4b61b2a4852a2
+
+jobs:
+  publish:
+    name: Sign, publish to the site and the release page
+    if: github.ref == 'refs/heads/main' && vars.FOCUS_PUBLISHING == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: release
+      url: https://how2me.me/focusapp/
+    permissions:
+      contents: write   # to create the tag and the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # the build number is the number of commits
+
+      - name: Work out the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=$(sed -n 's/^val baseVersion = "\(.*\)"$/\1/p' app/build.gradle.kts)
+          build=$(git rev-list --count HEAD)
+          [ -n "$base" ] && [ "$build" -gt 2 ] || { echo "::error::could not work out the version (base='$base' build='$build')"; exit 1; }
+          version="$base.$build"
+          # Never publish a lower build number than one that is already out: phones refuse downgrades.
+          highest=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
+            | sed -n 's/^v[0-9][0-9]*\.[0-9][0-9]*\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)
+          if [ -n "$highest" ] && [ "$build" -lt "$highest" ]; then
+            echo "::error::build $build is lower than the published build $highest"; exit 1
+          fi
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exists=true; else exists=false; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "version $version (release exists already: $exists)"
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: steps.version.outputs.exists == 'false'
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        if: steps.version.outputs.exists == 'false'
+
+      # Tests and lint are code from the repository. They run here, before the signing key is on
+      # the runner at all; only the build that needs the key runs next to it.
+      - name: Test and lint
+        if: steps.version.outputs.exists == 'false'
+        run: ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" :app:testDebugUnitTest :app:lintDebug
+
+      - name: Build and sign
+        if: steps.version.outputs.exists == 'false'
+        env:
+          KEYSTORE_B64: ${{ secrets.FOCUS_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.FOCUS_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.FOCUS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.FOCUS_KEY_PASSWORD }}
+        run: |
+          [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ] \
+            || { echo "::error::the signing secrets are missing from the release environment: run site/setup-ci-publishing.sh"; exit 1; }
+          umask 077
+          keystore="$RUNNER_TEMP/focus-release.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$keystore"
+          {
+            printf 'storeFile=%s\n' "$keystore"
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > keystore.properties
+          trap 'rm -f keystore.properties "$keystore"' EXIT
+          ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" :app:assembleDist
+          mkdir -p "$RUNNER_TEMP/apk"
+          cp app/build/outputs/apk/dist/app-dist.apk "$RUNNER_TEMP/apk/focus-launcher.apk"
+
+      - name: Or take the APK of the existing release
+        if: steps.version.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk"
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern "focus-launcher-$VERSION.apk" --dir "$RUNNER_TEMP/dl"
+          mv "$RUNNER_TEMP/dl/focus-launcher-$VERSION.apk" "$RUNNER_TEMP/apk/focus-launcher.apk"
+
+      - name: The APK must be what it claims to be
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          apk="$RUNNER_TEMP/apk/focus-launcher.apk"
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          out=$("$tools/apksigner" verify --print-certs "$apk" 2>&1) || { echo "$out"; echo "::error::the APK does not verify"; exit 1; }
+          certs=$(printf '%s\n' "$out" | sed -n 's/.*certificate SHA-256 digest: *//p' | sort -u)
+          [ "$certs" = "$RELEASE_CERT_SHA256" ] || { echo "::error::not signed with the release key alone (found: ${certs:-nothing})"; exit 1; }
+          badging=$("$tools/aapt2" dump badging "$apk")
+          name=$(printf '%s\n' "$badging" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          [ "$name" = "$VERSION" ] || { echo "::error::the APK says version '$name', expected '$VERSION'"; exit 1; }
+          # A public promise of this project: the app cannot go online.
+          if printf '%s\n' "$badging" | grep -q "android.permission.INTERNET"; then
+            echo "::error::the APK asks for the INTERNET permission"; exit 1
+          fi
+          echo "ok: version $name, signed with the release key, no INTERNET permission"
+
+      - name: Build the site around that APK
+        run: |
+          command -v rsvg-convert >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin; }
+          FOCUS_APK="$RUNNER_TEMP/apk/focus-launcher.apk" site/build.sh
+
+      - name: Upload to the server
+        env:
+          DEPLOY_KEY: ${{ secrets.FOCUS_DEPLOY_SSH_KEY }}
+          DEPLOY_TARGET: ${{ secrets.FOCUS_DEPLOY_TARGET }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.FOCUS_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$DEPLOY_KEY" ] && [ -n "$DEPLOY_TARGET" ] && [ -n "$DEPLOY_KNOWN_HOSTS" ] \
+            || { echo "::error::the upload secrets are missing from the release environment: run site/setup-ci-publishing.sh"; exit 1; }
+          echo "::add-mask::${DEPLOY_TARGET#*@}"
+          umask 077
+          key="$RUNNER_TEMP/deploy_key"; hosts="$RUNNER_TEMP/known_hosts"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          # The server runs its own fixed command for this key (site/server/receive.sh): it takes
+          # the archive, checks every entry, and installs plain site files only.
+          tar -C site/public -cf - . | ssh -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o LogLevel=ERROR \
+            -o ConnectTimeout=20 "$DEPLOY_TARGET" upload
+
+      - name: Check what visitors get
+        id: check
+        run: |
+          apk=$(ls site/public/*.apk | head -1 | xargs basename)
+          built=$(sha256sum "site/public/$apk" | cut -d' ' -f1)
+          served=$(curl -fsS -m 90 "$SITE_URL/$apk" | sha256sum | cut -d' ' -f1)
+          page=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "$SITE_URL/")
+          [ "$served" = "$built" ] && [ "$page" = "200" ] || { echo "::error::deploy check failed: page=$page served=$served built=$built"; exit 1; }
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"; echo "sha256=$built" >> "$GITHUB_OUTPUT"
+          echo "live: $SITE_URL/ serves $apk ($built)"
+
+      - name: Tell the search engines that take pings (IndexNow)
+        continue-on-error: true
+        run: |
+          keyid=$(cat site/src/indexnow-key.txt)
+          curl -s -m 25 -o /dev/null -w 'IndexNow: HTTP %{http_code}\n' -G "https://api.indexnow.org/indexnow" \
+            --data-urlencode "url=$SITE_URL/" --data-urlencode "key=$keyid" --data-urlencode "keyLocation=$SITE_URL/$keyid.txt"
+
+      - name: Create the release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          APK: ${{ steps.check.outputs.apk }}
+          SHA256: ${{ steps.check.outputs.sha256 }}
+        run: |
+          notes="Focus $VERSION: the same APK as on [how2me.me/focusapp]($SITE_URL/). It installs over any earlier version from the site or this page and keeps your settings.
+
+          - SHA-256 of \`$APK\`: \`$SHA256\`
+          - Signed with the project's release key (certificate SHA-256 \`$RELEASE_CERT_SHA256\`). Check it with \`apksigner verify --print-certs $APK\`.
+          - Built, signed and published by the Publish workflow from commit ${GITHUB_SHA::7}, after the owner approved the run."
+          gh release create "v$VERSION" "site/public/$APK" "site/public/$APK.sha256" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Focus $VERSION" --notes "$notes" --generate-notes --latest
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          EXISTED: ${{ steps.version.outputs.exists }}
+          APK: ${{ steps.check.outputs.apk }}
+          SHA256: ${{ steps.check.outputs.sha256 }}
+        run: |
+          {
+            echo "### Focus $VERSION is live"
+            echo ""
+            echo "- Site: $SITE_URL/ serves \`$APK\`"
+            echo "- sha256 \`$SHA256\`"
+            if [ "$EXISTED" = "true" ]; then echo "- The release already existed: its APK was put on the site again, nothing new was signed."
+            else echo "- Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

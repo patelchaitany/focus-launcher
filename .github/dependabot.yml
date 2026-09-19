@@ -1,0 +1,12 @@
+# The workflows pin every action to an exact commit. Dependabot watches those pins and opens a
+# pull request when a new version is out, so staying pinned does not mean staying old.
+# Gradle dependencies are deliberately not listed: the newest AndroidX needs a newer compileSdk
+# and Gradle plugin than this project builds with (see gradle/libs.versions.toml).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

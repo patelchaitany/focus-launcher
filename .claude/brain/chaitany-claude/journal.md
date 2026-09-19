@@ -267,6 +267,123 @@ and drawer; corrected to the branch's code (screen time line, swipe right, lock 
 sort, badge, keyboard).
 **Verified:** no conflict markers left; tests, lint and the release build re-run after the merge.
 
+
+## 2026-09-19 · Version 1.1: a collaborator's PR shipped, release page, CI
+
+**Asked (owner):** "there are new commit check them and push the new app in my phone as well as
+on the server download"; "have release page where we have the apk available"; "ci setup where we
+are building an APK on the github".
+
+**Checked:** `origin/main` was 4 commits ahead: PR #1 from a collaborator (the five entries above),
+merged by its author. Read the whole diff, 22 files. No new permission, no network code, nothing
+touching Gradle files, the wrapper, the site scripts, nginx rules, `.gitignore` or CI; the
+sensitive-content audit on the incoming diff found nothing. Safe to build. It does change things
+the owner had settled (a drawn work badge against "no icons"; the 24-hour bar gone from home;
+two new defaults; how "swipe left" was read): reported to him, open decisions 10–14.
+
+**Done:**
+- `versionCode` 2 / `versionName` 1.1. 19 tests pass, lint 0 errors, `release` and `dist` built;
+  the `dist` APK is 1.1, carries the release certificate and asks for no INTERNET permission.
+- **Phone:** `adb install --user 0 -r` of the release build: 1.0 → 1.1, data kept, still the
+  default home. The owner was in another app, so nothing was started for him: a passive loop
+  waited for his next return home, let Focus run 20 s, compiled it (`speed-profile`), found 0
+  crash lines. Found on the way: Focus was present in every profile of the phone, from the early
+  plain `adb install`s (open decision 15; nothing removed).
+- **Site:** home mockup, copy, JSON-LD feature list and README now show what 1.1 shows; link to
+  the release page under the download button. Previewed locally (desktop and phone width), then
+  `site/deploy.sh`.
+- **CI:** `.github/workflows/build.yml` (tests, lint, APK artifact; no secrets; skips brain, notes
+  and site changes) and `verify-release.yml` (attached APKs must carry the release certificate).
+  Went in as PR #2 so CI could prove itself before `main`: green on the first run, APK attached.
+- **Release page:** tags `v1.0` (first public commit) and `v1.1` (the merge of PR #2), each with
+  the APK and its `.sha256`. The 1.0 APK had been copied aside before rebuilding.
+- New `3-details/ci-and-releases.md`; Tier 1 and 2, lessons and decisions updated.
+
+**Verified:** served page says 1.1 and links `focus-launcher-1.1.apk`; SHA-256 of the served APK =
+the release asset = the local `dist` build (`8221fbbc…`); 1.0 still served and identical to its
+release asset (`c97b5fca…`); APK MIME type, CSP and the other headers unchanged; the main site
+and `/robots.txt` still 200; IndexNow accepted.
+`verify-release` **failed on its first real run**: the runner's newer `apksigner` words the
+certificate line differently, so my exact-prefix match found nothing and reported "different
+key". The APK was fine (its checksum step passed). The check now matches on "certificate SHA-256
+digest", prints apksigner's lines, and was tested locally: both official APKs pass, a debug-signed
+build is rejected. Also: CI APKs are now named after the pull request's head commit, not the
+temporary merge commit.
+**Not verified:** how 1.1 looks and feels on the phone (no screenshot was possible: Focus was not
+in front until the owner went home, and then he was using it); the new gestures; double tap to
+lock (needs the accessibility service, still not enabled).
+
+After the fix both releases were re-checked by hand and are green (the runner's build-tools 37
+print `V2 Signer: certificate SHA-256 digest`), and the push-triggered build on `main` passed.
+That run's predecessor, the build of the 1.1 release commit itself, had been cancelled by my own
+`cancel-in-progress: true` when the next push arrived; runs on `main` are no longer cancelled.
+
+**Open:** decisions 10–16 in `2-overview/user-and-decisions.md`.
+
+## 2026-09-20 · Publishing from CI, with the owner's approval
+
+**Asked:** "did you created an CI? And make sure to have an apk updated with the latest apk when
+ci finish creating apk on the site."
+
+**Answered first:** yes: `Build` and `Verify release` exist and are green; the site already served
+the newest code (1.1, no app change since). Then the catch: CI's APK is signed with a throwaway
+key, so copying it to the site would break updates for everyone; doing it properly means the real
+signing key and a server upload key on GitHub. That is the owner's decision, so he was asked once,
+with three options. He chose **automatic, with his approval**.
+
+**Built:**
+- `.github/workflows/publish.yml`: runs in the protected environment `release` (required
+  reviewer: the owner; `main` only); tests, lint, signs, checks certificate / version / no INTERNET
+  permission, builds the site, uploads, re-downloads and compares, pings IndexNow, creates the
+  release. Skips itself until the repository variable `FOCUS_PUBLISHING` is `on`.
+- `site/server/receive.sh`: the forced command of the upload key on the server. Tested there in a
+  throwaway directory with 15 archives: the valid one installed, 14 hostile or broken ones refused
+  with nothing written.
+- `site/setup-ci-publishing.sh` (+ `--off`): the owner's one-time switch. Creates the environment,
+  stores the signing secrets, makes and installs the restricted upload key, proves it cannot get a
+  shell, stores it, flips the variable. **Not run by me**: it handles his keys. Its
+  `authorized_keys` edit was tested in a sandbox home.
+- Versions are now `<baseVersion>.<commit count>` (a test build came out as 1.1.13, code 13), so
+  every published build installs over the previous one without anyone bumping a number.
+  `site/build.sh` and the CI artifact name read the version out of the APK.
+- One version = one binary: the publish job reuses an existing release's APK; `site/deploy.sh`
+  refuses to upload a different APK for a released version.
+- README, Tier 1–3, decisions updated (`3-details/ci-and-releases.md` has the design).
+
+**Verified:** 19 tests, lint 0 errors, release build with the new version scheme; `site/build.sh`
+with an explicit APK; all three workflow files parse; both shell scripts pass `bash -n`; the
+receiver and the key-list edit as described above. Went in as a pull request so `Build` ran on it.
+**Not verified, cannot be until the owner runs the setup:** the publish job end to end, including
+whether GitHub's runners can reach the server's SSH port.
+
+**Open:** decision 16 (run the setup script; approve the first run).
+
+## 2026-09-20 · "Run it and make sure everything is up to the standard"
+
+**Asked:** run `site/setup-ci-publishing.sh`, and make sure everything is up to standard. (Before
+that, a question: how does the runner get the SSH key if it is "in the yaml"? Answer given: the
+file holds only the secret's name; GitHub injects the value into an approved run; nothing exists
+until the setup has been run. No change.)
+
+**Not done, on purpose:** running the script. It enters his signing passwords into GitHub and adds
+a login key to his server. That stays the owner's action even when he asks; he got the reason and
+the one-line command.
+
+**Done instead:**
+- Read-only pre-flight of everything the script depends on: GitHub permissions and settings, the
+  local key files (names and counts only), the server's tools, SSH settings and modes. All passed.
+  Settled an open unknown: the server's SSH port is reachable from the internet, so runners can
+  upload.
+- Hardening, PR #4: actions pinned to exact commits + Dependabot for them; tests and lint moved
+  out of the step that holds the key; the build workflow now builds the site on the runner.
+- That new step failed on its first run and was right: `stat -f` means something else on Linux,
+  so `site/build.sh` could not have worked in the Publish job. Fixed (`wc -c`), green on the
+  second run: the runner produced the same 10 flat files the receiver accepts.
+
+**Verified:** PR #4 green after the fix; all workflow files parse; the pre-flight results above.
+**Not verified:** unchanged: signing with the real key on a runner, the upload, and the release
+step run for the first time when the owner has run the setup and approved a run.
+
 ## 2026-09-20 · Alarm, music and note sections; arrange the home screen by dragging (same contributor)
 
 **Asked:** widgets for calendar, music control, notes (a note app's widget if there is one, else

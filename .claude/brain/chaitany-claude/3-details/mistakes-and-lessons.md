@@ -110,10 +110,33 @@ Each entry: symptom → cause → fix / rule. Add to this whenever something cos
   top-most instance". → `android:taskAffinity="com.focus.launcher.settings"` on `SettingsActivity`.
   Reproduce / verify: `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER
   -n com.focus.launcher/.SettingsActivity -f 0x10200000` while the home screen is in front.
+- **It had already happened on the owner's phone**: every install before 2026-09-19 evening was
+  a plain `adb install -r`, and a per-user check (`pm list packages --user <id>`) showed Focus in
+  all of the phone's profiles. Nobody had looked. → After any install, list the package per user;
+  taking it out of a profile again is an uninstall, so it is the owner's decision.
 - **`adb install` without `--user` installs for every user, a work profile included.** Focus then
   shows up inside the work profile too, which the phone's owner noticed at once. → Always
   `adb install --user 0 …`; check with `pm list packages --user <id> com.focus.launcher`.
 - Work-profile calendars/usage are blocked by policy for personal-side apps; respect it.
+
+## GitHub
+- **`stat -f %z FILE || stat -c %s FILE` is not a portable "file size".** On Linux `stat -f` means
+  "file system": it succeeds and prints file-system facts, so the fallback never runs.
+  `site/build.sh` fed that text into Python and died, but only on the runner. → `wc -c < FILE`.
+  More generally: a script that will run in CI must be run in CI before the day it matters; the
+  build workflow now builds the site on every run for exactly that reason.
+- **zsh and unquoted variables, third time:** `set -- $spec` in a loop did not split, every API
+  path was wrong and everything answered 404, which looked like a permissions problem. → In this
+  shell, write a function with real arguments instead of splitting a string.
+- **`release` workflows run from the default branch's copy of the workflow file.** A release
+  published before `verify-release.yml` was on `main` would not have been checked. → Merge the
+  workflow first, publish the release after.
+- **`gh api repos/<other>/<repo>/git/ref/tags/<tag>` answers 404 with this token** although the
+  tag exists; `…/tags` lists them. → Look action versions up with the list endpoint, and do look
+  them up: the majors had moved well past what I remembered.
+- **A published APK cannot be rebuilt byte for byte**, and `app/build/outputs` is overwritten by
+  the next build. → Copy the current `dist` APK aside before bumping the version; that copy is
+  what made a `v1.0` release possible afterwards (its checksum matched the server's).
 
 ## Web
 - **CSS container units on the container itself** resolve against the *ancestor* (the viewport):
