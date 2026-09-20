@@ -72,7 +72,11 @@ merge request there, updates then follow this repo's `vX.Y.Z` tags by themselves
 `LICENSE` (GPL-3.0-or-later, the owner's choice), `fastlane/metadata/android/en-US/` (listing),
 `fdroid/com.focus.launcher.yml` (recipe template, reproducible build with the project's own
 signature) and the manual workflow `.github/workflows/fdroid.yml` (check with F-Droid's tools;
-submit only with the owner's GitLab token, after his approval). Details: `3-details/fdroid.md`.
+submit only with the owner's GitLab token, after his approval).
+**Where it stands (2026-09-20): the app is not on F-Droid and nothing has been submitted.** All
+four runs of the workflow were check-only (the `submit` job skipped in each); fdroiddata has no
+`metadata/com.focus.launcher.yml` and no merge request exists. How to run the workflow, and the
+three commands that answer "are we on F-Droid yet": `3-details/fdroid.md`.
 
 ## Releasing a new version
 With CI publishing on: merge to `main`, the owner approves the waiting Publish run, done (site,
@@ -91,7 +95,8 @@ the machine that has the key:
 
 ## Open
 CI publishing is built but waits for the owner to run the setup script · the F-Droid merge
-request waits for the owner's GitLab account and token.
+request waits for the owner's GitLab account, fork and token: until it is opened and merged,
+Focus is not on F-Droid.
 
 ## Tier 3 pointers
 `ci-and-releases.md` · `fdroid.md` · `signing-keys.md` · `toolchain-and-build.md` · `brain-upkeep.md` (the

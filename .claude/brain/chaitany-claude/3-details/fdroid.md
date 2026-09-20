@@ -84,6 +84,37 @@ Inputs: `tag` (empty = newest `vX.Y.Z`), `build` (default on), `submit` (default
   Without them it stops with the instruction. Agents do not create the GitLab account or enter
   the token: the owner does (`gh secret set FDROID_GITLAB_TOKEN --env release` prompts for it).
 
+## Running the workflow, and reading its result
+Nothing about F-Droid happens on a push; the workflow is `workflow_dispatch` only.
+- **GitHub:** Actions → **F-Droid** → *Run workflow* → branch `main`; `tag` empty = the newest
+  `vX.Y.Z` tag; `build` on (about 5 minutes, the whole check took 5:04 for v1.1.29); `submit` off.
+- **From a machine with `gh`:** `gh workflow run fdroid.yml --ref main -f tag=v1.1.29 -f build=true
+  -f submit=false`, then `gh run watch` (or `gh run list --workflow=fdroid.yml`).
+- **Verdict:** the `check` job's own steps. Green means F-Droid's tools accepted the recipe and,
+  with `build`, that F-Droid's build of the tag is identical to the published APK. The artifact
+  `fdroid-recipe` keeps the recipe as `rewritemeta`/`checkupdates` left it, `MERGE_REQUEST.md`,
+  `fdroid-build.log` and the APK F-Droid built (for a diff when the comparison fails).
+- **`submit` ticked** additionally needs the secret `FDROID_GITLAB_TOKEN` in the `release`
+  environment and the repository variable `FDROID_GITLAB_FORK`; the job waits for the owner's
+  approval and, without those two, stops with the instruction. Run the check alone as often as
+  you like: it uses no secrets and writes nothing outside the run.
+
+## Is Focus on F-Droid? How to check, without an account
+Three questions, in the order they become true. 1 and 2 work from anywhere; 3 needs a machine that
+may reach f-droid.org (the Claude cloud sandbox may not, see `mistakes-and-lessons.md`).
+```bash
+# 1. Is the recipe merged? 200 = yes (F-Droid will build it), 404 = no.
+curl -s -o /dev/null -w '%{http_code}\n' "https://gitlab.com/api/v4/projects/fdroid%2Ffdroiddata/repository/files/metadata%2Fcom.focus.launcher.yml?ref=master"
+# 2. Is a merge request open (or was one ever made)? Empty list = never submitted.
+curl -s "https://gitlab.com/api/v4/projects/fdroid%2Ffdroiddata/merge_requests?state=all&search=com.focus.launcher&in=title,description"
+# 3. Is a build published? 200 with versions = in the catalogue, 404 = not.
+curl -s -o /dev/null -w '%{http_code}\n' https://f-droid.org/api/v1/packages/com.focus.launcher
+```
+**Answer on 2026-09-20: no, and nothing has been submitted.** 1 = 404, 2 = empty, and all four runs
+of the F-Droid workflow were `check` only — the `submit` job is `skipped` in every one of them
+(the newest, on `main` at the v1.1.29 commit, is green with `build`). So the app is not on F-Droid
+and no reviewer has ever seen it. What is missing is only step 1–3 below, which the owner does.
+
 ## What only the owner can do
 1. A GitLab.com account; fork gitlab.com/fdroid/fdroiddata (public fork).
 2. A personal access token with the `api` scope; store it and the fork's path as above.

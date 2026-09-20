@@ -502,3 +502,33 @@ and 1.0 still served), and the F-Droid workflow for `v1.1.29` passed for real: b
 container and "successfully verified" against the published APK. What is left is the merge
 request itself, which needs the owner's GitLab account, fork and token (open decision 20).
 
+
+## 2026-09-20 — Asked: how do I run the F-Droid CI, and are we on F-Droid yet?
+
+A question, not a change to the app. Answer: **Focus is not on F-Droid, and nothing has ever been
+submitted.** Checked, from a cloud session:
+- `metadata/com.focus.launcher.yml` on fdroiddata's `master` → **404** (GitLab's files API and the
+  raw URL). No recipe there means F-Droid never builds or lists the app.
+- fdroiddata merge requests, `state=all`, searched for `com.focus.launcher` → **empty**; the same
+  search for "Focus Launcher" returns only two unrelated launcher MRs. So no reviewer has seen it.
+- The F-Droid workflow has **four** runs (all `workflow_dispatch`): #1 and #3 failed, #2 was the
+  false green, #4 (main at the v1.1.29 commit, 5:04 min) is green — and in every one of them the
+  `submit` job is **skipped**, because `submit` was left off. Nothing was ever pushed to GitLab.
+- f-droid.org itself could not be asked from here: the sandbox's egress proxy answers 403 to the
+  CONNECT and WebFetch calls the domain blocked. Recorded as a lesson; the fdroiddata check
+  answers the same question one step earlier, and the owner can run the package API from his Mac.
+- Could not check whether `FDROID_GITLAB_TOKEN` (release environment) and `FDROID_GITLAB_FORK`
+  (repository variable) exist: reading them needs the session's GitHub token and that call was
+  refused by the sandbox's classifier. The owner sees both in the repository's Settings; the
+  `submit` job also stops with a clear message when either is missing, so nothing breaks silently.
+
+**Written down:** `3-details/fdroid.md` gained "Running the workflow, and reading its result" (UI
+path, the `gh workflow run` line, what the artifact holds, what `submit` needs) and "Is Focus on
+F-Droid? How to check, without an account" (the three curl commands, in the order they become
+true, with today's answers). Tier 1 and `2-overview/github-and-release.md` now say plainly that
+the app is not listed and not submitted. Two sandbox traps in `mistakes-and-lessons.md`.
+
+**Still open (unchanged, decision 20):** the merge request needs the owner's GitLab account, a
+public fork of fdroiddata, a token with `api` scope stored as the environment secret, the fork's
+path as the repository variable — then a run with `submit` ticked, his approval of the `release`
+environment, and answering the reviewers on GitLab. No agent does any of those steps.

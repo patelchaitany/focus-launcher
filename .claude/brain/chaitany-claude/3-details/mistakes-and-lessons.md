@@ -131,6 +131,14 @@ Each entry: symptom → cause → fix / rule. Add to this whenever something cos
 - **A published APK cannot be rebuilt byte for byte**, and `app/build/outputs` is overwritten by
   the next build. → Copy the current `dist` APK aside before bumping the version; that copy is
   what made a `v1.0` release possible afterwards (its checksum matched the server's).
+- **A Claude cloud session cannot reach f-droid.org** (the egress proxy answers 403 to the
+  CONNECT, and WebFetch reports the domain blocked), so "is Focus in the catalogue?" cannot be
+  asked there directly. → gitlab.com is reachable: whether a recipe is in fdroiddata answers the
+  same question one step earlier (`fdroid.md`), and f-droid.org's package API is for the owner's
+  own machine. Never report "not published" from a blocked request alone; say which check ran.
+- **The cloud checkout has no tags and no `private/` folder**: `git tag` is empty (so
+  `git rev-list <tag>` exits 128) and step 3 of the pre-push audit has no pattern file. → Read
+  tags through the GitHub API, and say in the report that step 3 of the audit could not run.
 
 ## Web
 - **CSS container units on the container itself** resolve against the *ancestor* (the viewport):

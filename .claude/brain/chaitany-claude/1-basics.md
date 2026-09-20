@@ -65,9 +65,10 @@ points of PR #1 that touch the owner's earlier decisions still wait for his word
 10–14). The owner's phone runs the same code as a debug-key build. License: **GPL-3.0-or-later**.
 Versions are `<base>.<commit count>`. Publishing is still **by hand** (`3-details/ci-and-releases.md`):
 CI publishing is built but off until the owner runs `site/setup-ci-publishing.sh` himself.
-**F-Droid:** the repo is ready (listing, reproducible build, recipe, manual workflow); the merge
-request needs the owner's GitLab account and token (`3-details/fdroid.md`). Agents never run the
-setup script, create accounts or enter tokens.
+**F-Droid:** **not listed, not submitted** (checked 2026-09-20: no recipe in fdroiddata, no merge
+request). Here all is ready, the manual workflow's check is green for v1.1.29; the merge request
+needs the owner's GitLab account and token. Running it, and checking where it stands:
+`3-details/fdroid.md`. Agents never run a setup script, create accounts or enter tokens.
 A collaborator's PR #5 (home cards) is open, conflicts with `main`, and needs a review first.
 The accessibility service has **not been enabled** on the phone, so mid-session locking and double
 tap to lock are untested there. Google Search Console not done.
