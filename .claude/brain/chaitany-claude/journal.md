@@ -817,3 +817,15 @@ td, th, figcaption, h2, summary`, the facts and the footer outside `.phone`:
 **Lesson kept:** he stopped a tool call that was only waiting for CI. Do not block a turn on a
 CI run he did not ask to wait for; start what he asked for and check CI afterwards.
 
+
+## 2026-09-26 · Question only: what is Python-BPF (github.com/pythonbpf/Python-BPF)?
+**Asked:** an explanation of that outside project. Nothing in Focus was asked for or changed.
+**Did:** shallow-cloned it read-only (commit `ec5d72f`, v0.2.0) and read its README, `pyproject.toml`,
+`pythonbpf/codegen.py`, `decorators.py`, helpers, maps, examples and test README. Summary for the
+record: a compiler from a restricted Python subset (decorated with `@bpf`, `@map`, `@section`,
+`@bpfglobal`, `@struct`) to eBPF. It parses the source with `ast`, emits LLVM IR with llvmlite, runs
+`opt -O2` and `llc -march=bpf` to get a BPF ELF object, and loads it with the companion `pylibbpf`
+(libbpf bindings). No C or BCC. Alpha, Apache-2.0.
+**Verified:** by reading the source; nothing was built or run (loading BPF needs root and a kernel).
+**Open:** none. Not related to Focus; no tier changes needed.
+**Container note:** `private/` does not exist in cloud sessions, so audit step 3 cannot run there.
